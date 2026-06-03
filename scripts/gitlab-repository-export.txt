@@ -1,0 +1,279 @@
+(async () => {
+  const CONFIG = {
+    groupPath: 'software-deployment',
+    ref: 'master',
+    perPage: 100,
+    outputFileName: 'packages-export.json',
+    requestDelayMs: 30,
+    includeSubgroups: false
+  };
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function parseControl(content) {
+    const result = {};
+    let currentSection = null;
+
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim();
+
+      if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+
+      const sectionMatch = line.match(/^\[(.+?)\]$/);
+      if (sectionMatch) {
+        currentSection = sectionMatch[1].trim().toLowerCase();
+        continue;
+      }
+
+      // Nur Werte aus [Product] auswerten.
+      // Dadurch werden z. B. [ProductProperty] name: desktop ignoriert.
+      if (currentSection !== 'product') continue;
+
+      const match = line.match(/^([A-Za-z0-9_.-]+)\s*:\s*(.*)$/);
+      if (!match) continue;
+
+      const key = match[1].toLowerCase();
+      const value = match[2].trim();
+
+      result[key] = value;
+    }
+
+    return {
+      name: result.name || null,
+      package_id: result.id || null,
+      local_version: result.version || null
+    };
+  }
+
+  async function sha256(text) {
+    const data = new TextEncoder().encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+
+    return Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  async function fetchJson(url) {
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}: ${url}`);
+    }
+
+    return res.json();
+  }
+
+  async function fetchText(url) {
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers: {
+        Accept: 'text/plain'
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}: ${url}`);
+    }
+
+    return res.text();
+  }
+
+  function downloadJson(filename, data) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json'
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 1000);
+  }
+
+  async function getGroupProjects(groupPath) {
+    const all = [];
+    let page = 1;
+
+    while (true) {
+      const url =
+        `/api/v4/groups/${encodeURIComponent(groupPath)}/projects` +
+        `?per_page=${CONFIG.perPage}` +
+        `&page=${page}` +
+        `&include_subgroups=${CONFIG.includeSubgroups ? 'true' : 'false'}` +
+        `&archived=false` +
+        `&order_by=name` +
+        `&sort=asc`;
+
+      console.log(`[export] Lade Projekte aus Gruppe Seite ${page} ...`);
+
+      const items = await fetchJson(url);
+
+      if (!Array.isArray(items) || items.length === 0) {
+        break;
+      }
+
+      all.push(...items);
+
+      if (items.length < CONFIG.perPage) {
+        break;
+      }
+
+      page++;
+      await sleep(CONFIG.requestDelayMs);
+    }
+
+    return all;
+  }
+
+  async function main() {
+    const groupPath = CONFIG.groupPath;
+
+    console.log(`[export] Aktuelle Seite: ${location.href}`);
+    console.log(`[export] Gruppe: ${groupPath}`);
+    console.log(`[export] Branch/Ref: ${CONFIG.ref}`);
+    console.log('[export] Modus: GitLab-Gruppe → jedes Projekt → /control');
+    console.log('[export] Parser: nur [Product]-Sektion');
+
+    const projects = await getGroupProjects(groupPath);
+
+    console.log(`[export] Projekte gefunden: ${projects.length}`);
+
+    const packages = [];
+    const invalidFiles = [];
+    const missingControlFiles = [];
+
+    for (let i = 0; i < projects.length; i++) {
+      const project = projects[i];
+
+      const projectPath = project.path_with_namespace || `${groupPath}/${project.path}`;
+      const controlPath = 'control';
+
+      console.log(`[export] ${i + 1}/${projects.length}: ${projectPath}/control`);
+
+      const rawUrl =
+        `/api/v4/projects/${encodeURIComponent(projectPath)}/repository/files/` +
+        `${encodeURIComponent(controlPath)}/raw` +
+        `?ref=${encodeURIComponent(CONFIG.ref)}`;
+
+      try {
+        const controlRaw = await fetchText(rawUrl);
+        const parsed = parseControl(controlRaw);
+        const controlHash = await sha256(controlRaw);
+
+        if (!parsed.package_id) {
+          invalidFiles.push({
+            project: projectPath,
+            source_path: `${projectPath}/control`,
+            reason: 'Keine id: in [Product] gefunden',
+            control_raw: controlRaw
+          });
+          continue;
+        }
+
+        const packageId = parsed.package_id.trim();
+        const packageName = parsed.name ? parsed.name.trim() : packageId;
+        const localVersion = parsed.local_version ? parsed.local_version.trim() : null;
+
+        packages.push({
+          id: packageId,
+          name: packageName,
+          package_id: packageId,
+          local_version: localVersion,
+          source_path: `${projectPath}/control`,
+          control_raw: controlRaw,
+          control_hash: controlHash,
+          package_status: 'active',
+          last_seen_at: new Date().toISOString(),
+          missing_since: null,
+          check_message: 'Paket wurde aus GitLab-Gruppenexport importiert.'
+        });
+
+        await sleep(CONFIG.requestDelayMs);
+      } catch (err) {
+        if (String(err.message).includes('404')) {
+          missingControlFiles.push({
+            project: projectPath,
+            source_path: `${projectPath}/control`,
+            reason: 'Keine control-Datei im Projekt-Root gefunden.'
+          });
+        } else {
+          invalidFiles.push({
+            project: projectPath,
+            source_path: `${projectPath}/control`,
+            reason: err.message
+          });
+
+          console.warn(`[export] Fehler bei ${projectPath}/control:`, err);
+        }
+      }
+    }
+
+    const deduped = new Map();
+    const duplicatePackageIds = [];
+
+    for (const pkg of packages) {
+      if (deduped.has(pkg.package_id)) {
+        duplicatePackageIds.push(pkg.package_id);
+        console.warn(`[export] Doppelte Paket-ID, letzter Eintrag gewinnt: ${pkg.package_id}`);
+      }
+
+      deduped.set(pkg.package_id, pkg);
+    }
+
+    const exportData = {
+      exported_at: new Date().toISOString(),
+      group_path: groupPath,
+      ref: CONFIG.ref,
+      mode: 'gitlab-group-project-root-control',
+      parser: 'product-section-only',
+      packages: [...deduped.values()],
+      invalid_files: invalidFiles,
+      missing_control_files: missingControlFiles,
+      duplicate_package_ids: [...new Set(duplicatePackageIds)],
+      stats: {
+        projects: projects.length,
+        packages_raw: packages.length,
+        packages: deduped.size,
+        invalid_files: invalidFiles.length,
+        missing_control_files: missingControlFiles.length,
+        duplicate_package_ids: [...new Set(duplicatePackageIds)].length
+      }
+    };
+
+    console.log('[export] Fertig:', exportData.stats);
+
+    if (invalidFiles.length > 0) {
+      console.warn('[export] Ungültige control-Dateien:', invalidFiles);
+    }
+
+    if (missingControlFiles.length > 0) {
+      console.warn('[export] Projekte ohne control-Datei:', missingControlFiles);
+    }
+
+    if (duplicatePackageIds.length > 0) {
+      console.warn('[export] Doppelte Paket-IDs:', [...new Set(duplicatePackageIds)]);
+    }
+
+    downloadJson(CONFIG.outputFileName, exportData);
+  }
+
+  main().catch(err => {
+    console.error('[export] Fehler:', err);
+    alert(`Export fehlgeschlagen: ${err.message}`);
+  });
+})();

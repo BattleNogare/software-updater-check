@@ -1,17 +1,28 @@
 import { createClient } from '@supabase/supabase-js';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  rmSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, relative } from 'node:path';
 import crypto from 'node:crypto';
 import os from 'node:os';
 
 const CONFIG = {
-  gitUrl: process.env.PRIVATE_GIT_URL || 'https://git.iserv.eu/software-deployment',
+  gitUrl: process.env.PRIVATE_GIT_URL || 'https://git.iserv.eu/software-deployment.git',
   gitBranch: process.env.PRIVATE_GIT_BRANCH || '',
   gitToken: process.env.PRIVATE_GIT_TOKEN || '',
+  gitUsername: process.env.PRIVATE_GIT_USERNAME || 'oauth2',
+
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  workDir: join(os.tmpdir(), `software-deployment-${Date.now()}`),
+
+  workDir: process.env.WORK_DIR || join(os.tmpdir(), `software-deployment-${Date.now()}`),
+  maxControlDepth: Number(process.env.MAX_CONTROL_DEPTH || 8),
 };
 
 if (!CONFIG.supabaseUrl || !CONFIG.supabaseServiceRoleKey) {
@@ -30,13 +41,46 @@ function log(message) {
   console.log(`[import] ${message}`);
 }
 
+function warn(message) {
+  console.warn(`[warn] ${message}`);
+}
+
 function fail(message, error) {
   console.error(`[import] ${message}`);
   if (error) console.error(error);
+  cleanup();
   process.exit(1);
 }
 
-function withTokenUrl(url, token) {
+function cleanup() {
+  if (existsSync(CONFIG.workDir)) {
+    try {
+      log(`Cleanup: ${CONFIG.workDir}`);
+      rmSync(CONFIG.workDir, { recursive: true, force: true });
+    } catch (error) {
+      warn(`Cleanup fehlgeschlagen: ${error.message}`);
+    }
+  }
+}
+
+function maskSecret(value) {
+  if (!value) return value;
+  if (value.length <= 8) return '***';
+  return `${value.slice(0, 4)}***${value.slice(-4)}`;
+}
+
+function maskUrlForLog(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.username) parsed.username = '***';
+    if (parsed.password) parsed.password = '***';
+    return parsed.toString();
+  } catch {
+    return '***';
+  }
+}
+
+function withTokenUrl(url, token, username = 'oauth2') {
   if (!token) return url;
 
   const parsed = new URL(url);
@@ -45,35 +89,99 @@ function withTokenUrl(url, token) {
     return url;
   }
 
-  parsed.username = 'oauth2';
+  parsed.username = username;
   parsed.password = token;
 
   return parsed.toString();
 }
 
-function runGitClone() {
-  const cloneUrl = withTokenUrl(CONFIG.gitUrl, CONFIG.gitToken);
+function run(command, args, options = {}) {
+  const safeArgs = args.map((arg) => {
+    const text = String(arg);
 
-  const args = ['clone', '--depth', '1'];
+    if (CONFIG.gitToken && text.includes(CONFIG.gitToken)) {
+      return text.replaceAll(CONFIG.gitToken, maskSecret(CONFIG.gitToken));
+    }
 
-  if (CONFIG.gitBranch) {
-    args.push('--branch', CONFIG.gitBranch);
+    return text;
+  });
+
+  log(`Run: ${command} ${safeArgs.join(' ')}`);
+
+  return execFileSync(command, args, {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: '0',
+    },
+    ...options,
+  });
+}
+
+function buildSparsePatterns(maxDepth) {
+  const patterns = ['/control'];
+
+  for (let depth = 1; depth <= maxDepth; depth += 1) {
+    patterns.push(`${'/*'.repeat(depth)}/control`);
   }
 
-  args.push(cloneUrl, CONFIG.workDir);
+  return patterns;
+}
 
-  log(`Clone Repository nach ${CONFIG.workDir}`);
+function runGitSparseCheckout() {
+  const remoteUrl = withTokenUrl(CONFIG.gitUrl, CONFIG.gitToken, CONFIG.gitUsername);
+
+  log(`Sparse Checkout Repository nach ${CONFIG.workDir}`);
+  log(`Remote: ${maskUrlForLog(remoteUrl)}`);
+  log('Es werden nur control-Dateien ausgecheckt.');
+
+  const sparsePatterns = buildSparsePatterns(CONFIG.maxControlDepth);
 
   try {
-    execFileSync('git', args, {
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: '0',
-      },
-    });
+    run('git', ['init', CONFIG.workDir]);
+
+    run('git', ['-C', CONFIG.workDir, 'remote', 'add', 'origin', remoteUrl]);
+
+    run('git', ['-C', CONFIG.workDir, 'config', 'core.sparseCheckout', 'true']);
+    run('git', ['-C', CONFIG.workDir, 'config', 'core.sparseCheckoutCone', 'false']);
+
+    const sparseCheckoutFile = join(CONFIG.workDir, '.git', 'info', 'sparse-checkout');
+
+    writeFileSync(
+      sparseCheckoutFile,
+      sparsePatterns.join('\n') + '\n',
+      'utf8'
+    );
+
+    log('Sparse Checkout Patterns:');
+    for (const pattern of sparsePatterns) {
+      log(`  ${pattern}`);
+    }
+
+    const fetchArgs = [
+      '-C',
+      CONFIG.workDir,
+      'fetch',
+      '--depth',
+      '1',
+      '--filter=blob:none',
+      'origin',
+    ];
+
+    if (CONFIG.gitBranch) {
+      fetchArgs.push(CONFIG.gitBranch);
+    } else {
+      fetchArgs.push('HEAD');
+    }
+
+    run('git', fetchArgs);
+
+    run('git', ['-C', CONFIG.workDir, 'checkout', 'FETCH_HEAD']);
   } catch (error) {
-    fail('Git clone fehlgeschlagen. Prüfe PRIVATE_GIT_URL, PRIVATE_GIT_TOKEN und Zugriff.', error);
+    fail(
+      'Git Sparse Checkout fehlgeschlagen. Prüfe Erreichbarkeit, Token, Branch, Git-URL und Zugriff.',
+      error
+    );
   }
 }
 
@@ -138,21 +246,32 @@ function normalizePackageRecord(controlFile) {
   if (!parsed.package_id) {
     return {
       valid: false,
-      reason: `Keine id: gefunden`,
+      reason: 'Keine id: gefunden',
       source_path: relPath,
       control_raw: raw,
     };
   }
 
   const safeId = parsed.package_id.trim();
+  const safeName = parsed.name?.trim() || safeId;
+  const safeVersion = parsed.local_version?.trim() || null;
+
+  if (!safeId) {
+    return {
+      valid: false,
+      reason: 'Leere id: gefunden',
+      source_path: relPath,
+      control_raw: raw,
+    };
+  }
 
   return {
     valid: true,
     row: {
       id: safeId,
-      name: parsed.name || safeId,
+      name: safeName,
       package_id: safeId,
-      local_version: parsed.local_version || null,
+      local_version: safeVersion,
       source_path: relPath,
       control_raw: raw,
       control_hash: sha256(raw),
@@ -176,17 +295,50 @@ async function getExistingPackages() {
   return new Map((data || []).map((row) => [row.package_id, row]));
 }
 
+function dedupeRecords(records) {
+  const map = new Map();
+  const duplicateIds = new Set();
+
+  for (const record of records) {
+    if (map.has(record.package_id)) {
+      duplicateIds.add(record.package_id);
+    }
+
+    map.set(record.package_id, record);
+  }
+
+  if (duplicateIds.size > 0) {
+    warn(`Doppelte package_id gefunden: ${Array.from(duplicateIds).join(', ')}`);
+    warn('Bei doppelten IDs gewinnt der zuletzt gefundene Datensatz.');
+  }
+
+  return Array.from(map.values());
+}
+
 async function upsertPackages(records) {
-  if (!records.length) return;
+  if (!records.length) {
+    log('Keine gültigen Pakete zum Upsert vorhanden.');
+    return;
+  }
 
-  const { error } = await supabase
-    .from('packages')
-    .upsert(records, {
-      onConflict: 'package_id',
-    });
+  log(`${records.length} Paket(e) werden nach Supabase geschrieben.`);
 
-  if (error) {
-    fail('Upsert nach Supabase fehlgeschlagen.', error);
+  const chunkSize = 500;
+
+  for (let i = 0; i < records.length; i += chunkSize) {
+    const chunk = records.slice(i, i + chunkSize);
+
+    const { error } = await supabase
+      .from('packages')
+      .upsert(chunk, {
+        onConflict: 'package_id',
+      });
+
+    if (error) {
+      fail('Upsert nach Supabase fehlgeschlagen.', error);
+    }
+
+    log(`Upsert Chunk ${i + 1}-${Math.min(i + chunkSize, records.length)} erledigt.`);
   }
 }
 
@@ -209,18 +361,24 @@ async function markMissingPackages(foundIds) {
 
   log(`${missingIds.length} Paket(e) fehlen im Git und werden als missing markiert.`);
 
-  const { error } = await supabase
-    .from('packages')
-    .update({
-      package_status: 'missing',
-      missing_since: now,
-      check_status: 'skipped',
-      check_message: 'Paket wurde beim letzten Git-Import nicht mehr gefunden.',
-    })
-    .in('package_id', missingIds);
+  const chunkSize = 500;
 
-  if (error) {
-    fail('Missing-Markierung fehlgeschlagen.', error);
+  for (let i = 0; i < missingIds.length; i += chunkSize) {
+    const chunk = missingIds.slice(i, i + chunkSize);
+
+    const { error } = await supabase
+      .from('packages')
+      .update({
+        package_status: 'missing',
+        missing_since: now,
+        check_status: 'skipped',
+        check_message: 'Paket wurde beim letzten Git-Import nicht mehr gefunden.',
+      })
+      .in('package_id', chunk);
+
+    if (error) {
+      fail('Missing-Markierung fehlgeschlagen.', error);
+    }
   }
 }
 
@@ -237,15 +395,20 @@ async function insertAuditLog(action, entityType, entityId, oldData, newData) {
     });
 
   if (error) {
-    console.warn(`[audit] Audit-Log fehlgeschlagen: ${error.message}`);
+    warn(`Audit-Log fehlgeschlagen: ${error.message}`);
   }
 }
 
 async function auditChanges(records, existingMap) {
+  let imported = 0;
+  let updated = 0;
+  let unchanged = 0;
+
   for (const row of records) {
     const existing = existingMap.get(row.package_id);
 
     if (!existing) {
+      imported += 1;
       await insertAuditLog('package_imported', 'package', row.package_id, null, row);
       continue;
     }
@@ -257,28 +420,32 @@ async function auditChanges(records, existingMap) {
       existing.package_status === 'missing';
 
     if (changed) {
+      updated += 1;
       await insertAuditLog('package_updated_from_import', 'package', row.package_id, existing, row);
+    } else {
+      unchanged += 1;
     }
   }
+
+  log(`Audit: ${imported} neu, ${updated} geändert, ${unchanged} unverändert.`);
 }
 
 async function main() {
   log('Starte Paketimport.');
+  log(`Arbeitsverzeichnis: ${CONFIG.workDir}`);
+  log(`Max control Tiefe: ${CONFIG.maxControlDepth}`);
 
-  if (existsSync(CONFIG.workDir)) {
-    rmSync(CONFIG.workDir, { recursive: true, force: true });
-  }
+  cleanup();
 
   mkdirSync(CONFIG.workDir, { recursive: true });
 
-  runGitClone();
+  runGitSparseCheckout();
 
   const controlFiles = findControlFiles(CONFIG.workDir);
 
   log(`${controlFiles.length} control-Datei(en) gefunden.`);
 
-  const records = [];
-  const foundIds = new Set();
+  const recordsRaw = [];
   const invalidFiles = [];
 
   for (const controlFile of controlFiles) {
@@ -289,13 +456,15 @@ async function main() {
       continue;
     }
 
-    records.push(normalized.row);
-    foundIds.add(normalized.row.package_id);
+    recordsRaw.push(normalized.row);
   }
 
   for (const invalid of invalidFiles) {
-    console.warn(`[warn] Übersprungen: ${invalid.source_path} (${invalid.reason})`);
+    warn(`Übersprungen: ${invalid.source_path} (${invalid.reason})`);
   }
+
+  const records = dedupeRecords(recordsRaw);
+  const foundIds = new Set(records.map((record) => record.package_id));
 
   const existingMap = await getExistingPackages();
 
@@ -303,9 +472,11 @@ async function main() {
   await upsertPackages(records);
   await markMissingPackages(foundIds);
 
-  log(`Import abgeschlossen. Gültige Pakete: ${records.length}, ungültige control-Dateien: ${invalidFiles.length}`);
+  log('Import abgeschlossen.');
+  log(`Gültige Pakete: ${records.length}`);
+  log(`Ungültige control-Dateien: ${invalidFiles.length}`);
 
-  rmSync(CONFIG.workDir, { recursive: true, force: true });
+  cleanup();
 }
 
 main().catch((error) => {
