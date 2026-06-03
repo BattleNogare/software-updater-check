@@ -1,0 +1,30 @@
+name: Import packages from private Git
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 2 * * *"
+
+jobs:
+  import-packages:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout website repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Import packages
+        run: npm run import-packages
+        env:
+          PRIVATE_GIT_URL: ${{ secrets.PRIVATE_GIT_URL }}
+          PRIVATE_GIT_TOKEN: ${{ secrets.PRIVATE_GIT_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
