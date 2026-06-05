@@ -9,21 +9,21 @@
 
   <style>
     :root {
-      --bg: #0f172a;
-      --panel: #111c33;
-      --panel-2: #16233f;
-      --text: #e5e7eb;
-      --muted: #94a3b8;
-      --border: rgba(148, 163, 184, 0.22);
-      --accent: #38bdf8;
-      --accent-2: #0ea5e9;
-      --green: #22c55e;
-      --yellow: #eab308;
-      --orange: #f97316;
-      --red: #ef4444;
-      --blue: #3b82f6;
-      --gray: #64748b;
-      --shadow: 0 20px 60px rgba(0,0,0,0.35);
+      --bg: #080808;
+      --panel: #141414;
+      --panel-2: #1f1f1f;
+      --text: #f5f5f5;
+      --muted: #a3a3a3;
+      --border: rgba(229, 229, 229, 0.18);
+      --accent: #d4d4d4;
+      --accent-2: #525252;
+      --green: #d4d4d4;
+      --yellow: #bdbdbd;
+      --orange: #e5e5e5;
+      --red: #f5f5f5;
+      --blue: #c0c0c0;
+      --gray: #737373;
+      --shadow: 0 20px 60px rgba(0,0,0,0.45);
       --radius: 18px;
     }
 
@@ -36,8 +36,8 @@
       min-height: 100vh;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background:
-        radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 35%),
-        radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.13), transparent 35%),
+        radial-gradient(circle at top left, rgba(245, 245, 245, 0.08), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(163, 163, 163, 0.08), transparent 35%),
         var(--bg);
       color: var(--text);
     }
@@ -72,7 +72,7 @@
 
     .login-card {
       width: min(440px, 100%);
-      background: rgba(17, 28, 51, 0.92);
+      background: rgba(20, 20, 20, 0.94);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
@@ -108,7 +108,7 @@
     .textarea {
       width: 100%;
       border: 1px solid var(--border);
-      background: rgba(15, 23, 42, 0.72);
+      background: rgba(10, 10, 10, 0.72);
       color: var(--text);
       border-radius: 12px;
       padding: 11px 12px;
@@ -123,13 +123,13 @@
     .input:focus,
     .select:focus,
     .textarea:focus {
-      border-color: rgba(56, 189, 248, 0.7);
-      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+      border-color: rgba(229, 229, 229, 0.65);
+      box-shadow: 0 0 0 3px rgba(229, 229, 229, 0.10);
     }
 
     .btn {
       border: 1px solid transparent;
-      background: var(--accent-2);
+      background: linear-gradient(180deg, #737373, #525252);
       color: white;
       border-radius: 12px;
       padding: 10px 14px;
@@ -154,15 +154,15 @@
     }
 
     .btn.secondary {
-      background: rgba(15, 23, 42, 0.55);
+      background: rgba(38, 38, 38, 0.72);
       border-color: var(--border);
       color: var(--text);
     }
 
     .btn.danger {
-      background: rgba(239, 68, 68, 0.15);
-      border-color: rgba(239, 68, 68, 0.35);
-      color: #fecaca;
+      background: rgba(245, 245, 245, 0.10);
+      border-color: rgba(245, 245, 245, 0.28);
+      color: #f5f5f5;
     }
 
     .btn.small {
@@ -215,7 +215,7 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      background: rgba(17, 28, 51, 0.72);
+      background: rgba(20, 20, 20, 0.78);
       border: 1px solid var(--border);
       border-radius: 999px;
       padding: 8px 8px 8px 14px;
@@ -247,7 +247,7 @@
     }
 
     .card {
-      background: rgba(17, 28, 51, 0.76);
+      background: rgba(20, 20, 20, 0.78);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 14px;
@@ -271,7 +271,7 @@
       grid-template-columns: 1fr auto auto auto;
       gap: 10px;
       margin: 16px 0;
-      background: rgba(17, 28, 51, 0.72);
+      background: rgba(20, 20, 20, 0.78);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 12px;
@@ -279,7 +279,7 @@
 
     .table-shell {
       overflow: auto;
-      background: rgba(17, 28, 51, 0.72);
+      background: rgba(20, 20, 20, 0.78);
       border: 1px solid var(--border);
       border-radius: 18px;
       box-shadow: var(--shadow);
@@ -288,11 +288,11 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 1250px;
+      min-width: 1080px;
     }
 
     thead {
-      background: rgba(15, 23, 42, 0.82);
+      background: rgba(10, 10, 10, 0.88);
       position: sticky;
       top: 0;
       z-index: 5;
@@ -325,7 +325,7 @@
     }
 
     tbody tr:hover {
-      background: rgba(56, 189, 248, 0.06);
+      background: rgba(229, 229, 229, 0.06);
     }
 
     .muted {
@@ -356,39 +356,39 @@
     }
 
     .pill.green {
-      color: #bbf7d0;
-      background: rgba(34, 197, 94, 0.13);
-      border-color: rgba(34, 197, 94, 0.28);
+      color: #f5f5f5;
+      background: rgba(212, 212, 212, 0.12);
+      border-color: rgba(212, 212, 212, 0.28);
     }
 
     .pill.yellow {
-      color: #fef08a;
-      background: rgba(234, 179, 8, 0.13);
-      border-color: rgba(234, 179, 8, 0.28);
+      color: #e5e5e5;
+      background: rgba(163, 163, 163, 0.14);
+      border-color: rgba(163, 163, 163, 0.30);
     }
 
     .pill.orange {
-      color: #fed7aa;
-      background: rgba(249, 115, 22, 0.13);
-      border-color: rgba(249, 115, 22, 0.28);
+      color: #ffffff;
+      background: rgba(229, 229, 229, 0.16);
+      border-color: rgba(229, 229, 229, 0.34);
     }
 
     .pill.red {
-      color: #fecaca;
-      background: rgba(239, 68, 68, 0.13);
-      border-color: rgba(239, 68, 68, 0.28);
+      color: #ffffff;
+      background: rgba(245, 245, 245, 0.18);
+      border-color: rgba(245, 245, 245, 0.36);
     }
 
     .pill.blue {
-      color: #bfdbfe;
-      background: rgba(59, 130, 246, 0.13);
-      border-color: rgba(59, 130, 246, 0.28);
+      color: #e5e5e5;
+      background: rgba(192, 192, 192, 0.14);
+      border-color: rgba(192, 192, 192, 0.30);
     }
 
     .pill.gray {
-      color: #cbd5e1;
-      background: rgba(100, 116, 139, 0.14);
-      border-color: rgba(100, 116, 139, 0.28);
+      color: #d4d4d4;
+      background: rgba(115, 115, 115, 0.16);
+      border-color: rgba(115, 115, 115, 0.30);
     }
 
     .row-actions {
@@ -457,7 +457,7 @@
       padding: 10px;
       border: 1px solid rgba(148, 163, 184, 0.14);
       border-radius: 14px;
-      background: rgba(15, 23, 42, 0.42);
+      background: rgba(10, 10, 10, 0.48);
     }
 
     .source-field-caption {
@@ -602,7 +602,7 @@
     </section>
 
     <section class="toolbar">
-      <input id="searchInput" class="input" placeholder="Suche nach Paketname, ID, Version, Status, Quelle ..." />
+      <input id="searchInput" class="input" placeholder="Suche nach Paketname, ID, Version, Status ..." />
 
       <select id="statusFilter" class="select">
         <option value="">Alle Status</option>
@@ -635,19 +635,17 @@
           <tr>
             <th class="sortable" data-sort="name">Paket</th>
             <th class="sortable" data-sort="local_version">Paketversion</th>
+            <th class="sortable" data-sort="check_status">Status</th>
+            <th class="sortable" data-sort="version_jump_score">Versionssprung</th>
             <th class="sortable" data-sort="online_version">Online-Version</th>
             <th class="sortable" data-sort="installation_count">Anzahl Installationen</th>
-            <th class="sortable" data-sort="version_jump_score">Versionssprung</th>
-            <th class="sortable" data-sort="check_status">Status</th>
             <th class="sortable" data-sort="last_checked">Letzte Abfrage</th>
-            <th class="sortable" data-sort="last_seen_at">Letzter Import</th>
-            <th>Quelle</th>
             <th>Aktionen</th>
           </tr>
         </thead>
         <tbody id="packageTbody">
           <tr>
-            <td colspan="10" class="empty">Lade Daten ...</td>
+            <td colspan="8" class="empty">Lade Daten ...</td>
           </tr>
         </tbody>
       </table>
@@ -657,13 +655,26 @@
   <dialog id="sourcesDialog">
     <div class="dialog-head">
       <div>
-        <h2 id="sourcesTitle">Quellen</h2>
-        <p id="sourcesSubtitle">Quellen für dieses Paket bearbeiten.</p>
+        <h2 id="sourcesTitle">Optionen</h2>
+        <p id="sourcesSubtitle">Quellen und Installationsanzahl für dieses Paket bearbeiten.</p>
       </div>
       <button id="closeSourcesBtn" class="btn secondary small">Schließen</button>
     </div>
 
     <div class="dialog-body">
+      <section class="card" style="margin-bottom:18px;">
+        <div class="label">Anzahl Installationen</div>
+        <div class="install-box" style="margin-top:8px;align-items:flex-end;">
+          <div class="field" style="margin:0;max-width:180px;">
+            <label for="optionInstallCount">Installationen</label>
+            <input id="optionInstallCount" class="input" type="number" min="0" value="0" />
+          </div>
+          <button id="saveOptionInstallBtn" class="btn secondary small">Speichern</button>
+        </div>
+        <div id="optionInstallMeta" class="muted" style="font-size:12px;margin-top:8px;"></div>
+      </section>
+
+      <h3 style="margin:0 0 14px;">Quellen</h3>
       <div id="sourcesList"></div>
 
       <hr style="border:0;border-top:1px solid var(--border);margin:22px 0;">
@@ -805,7 +816,10 @@
       newSourceInterval: $('newSourceInterval'),
       newSourceEnabled: $('newSourceEnabled'),
       addSourceBtn: $('addSourceBtn'),
-      sourcesMessage: $('sourcesMessage')
+      sourcesMessage: $('sourcesMessage'),
+      optionInstallCount: $('optionInstallCount'),
+      optionInstallMeta: $('optionInstallMeta'),
+      saveOptionInstallBtn: $('saveOptionInstallBtn')
     };
 
     function canMaintain() {
@@ -897,6 +911,11 @@
       els.closeSourcesBtn.addEventListener('click', closeSourcesDialog);
       els.closeSourcesBtn2.addEventListener('click', closeSourcesDialog);
       els.addSourceBtn.addEventListener('click', addSource);
+      els.saveOptionInstallBtn.addEventListener('click', () => {
+        if (!currentSourcesPackageId) return;
+        const count = Number(els.optionInstallCount.value || 0);
+        saveInstallationCount(currentSourcesPackageId, count, els.saveOptionInstallBtn);
+      });
       els.newSourceType.addEventListener('change', applyNewSourceDefaults);
 
       const { data } = await sb.auth.getSession();
@@ -1007,7 +1026,7 @@
     }
 
     async function loadPackages() {
-      els.packageTbody.innerHTML = `<tr><td colspan="10" class="empty">Lade Pakete ...</td></tr>`;
+      els.packageTbody.innerHTML = `<tr><td colspan="8" class="empty">Lade Pakete ...</td></tr>`;
 
       const { data, error } = await sb
         .from('packages')
@@ -1015,7 +1034,7 @@
         .order('name', { ascending: true });
 
       if (error) {
-        els.packageTbody.innerHTML = `<tr><td colspan="10" class="empty">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
+        els.packageTbody.innerHTML = `<tr><td colspan="8" class="empty">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
         return;
       }
 
@@ -1127,41 +1146,26 @@
       const rows = getFilteredPackages();
 
       if (!rows.length) {
-        els.packageTbody.innerHTML = `<tr><td colspan="10" class="empty">Keine Pakete gefunden.</td></tr>`;
+        els.packageTbody.innerHTML = `<tr><td colspan="8" class="empty">Keine Pakete gefunden.</td></tr>`;
         return;
       }
 
       els.packageTbody.innerHTML = rows.map((p) => {
-        const src = sourcesByPackage[p.package_id] || [];
-        const firstSource = src[0];
-
-        const sourceLabel = firstSource
-          ? `<div>${escapeHtml(firstSource.source_type)}</div><div class="muted">${escapeHtml(firstSource.source_url)}</div>${firstSource.version_selector ? `<div class="muted" style="font-size:12px;margin-top:3px;">${escapeHtml(firstSource.version_selector)}${firstSource.version_pattern ? ` · ${escapeHtml(firstSource.version_pattern)}` : ''}</div>` : ''}`
-          : `<span class="muted">Keine Quelle</span>`;
-
-        const installCell = canMaintain()
-          ? `
-            <div class="install-box">
-              <input class="input" type="number" min="0" value="${Number(p.installation_count || 0)}" data-install-input="${escapeHtml(p.package_id)}">
-              <button class="btn secondary small" data-save-install="${escapeHtml(p.package_id)}">Speichern</button>
-            </div>
-            <div class="muted" style="font-size:12px;margin-top:4px;">${escapeHtml(p.installation_count_source || 'manual')} · ${formatDate(p.installation_count_updated_at)}</div>
-          `
-          : `
-            <strong>${Number(p.installation_count || 0)}</strong>
-            <div class="muted" style="font-size:12px;margin-top:4px;">${escapeHtml(p.installation_count_source || 'manual')}</div>
-          `;
+        const installCell = `
+          <strong>${Number(p.installation_count || 0)}</strong>
+          <div class="muted" style="font-size:12px;margin-top:4px;">${escapeHtml(p.installation_count_source || 'manual')}</div>
+        `;
 
         const actions = canMaintain()
           ? `
             <div class="row-actions">
               <button class="btn small" data-sync="${escapeHtml(p.package_id)}">Sync</button>
-              <button class="btn secondary small" data-sources="${escapeHtml(p.package_id)}">Quellen</button>
+              <button class="btn secondary small" data-sources="${escapeHtml(p.package_id)}">Optionen</button>
             </div>
           `
           : `
             <div class="row-actions">
-              <button class="btn secondary small" data-sources="${escapeHtml(p.package_id)}">Quellen</button>
+              <button class="btn secondary small" data-sources="${escapeHtml(p.package_id)}">Optionen</button>
             </div>
           `;
 
@@ -1172,22 +1176,14 @@
               <div class="pkg-id">${escapeHtml(p.package_id)}</div>
             </td>
             <td>${escapeHtml(p.local_version || '-')}</td>
+            <td>${statusPill(p.check_status, p.update_available)}</td>
+            <td>${jumpPill(p.version_jump_type, p.version_jump_score)}</td>
             <td>
               <strong>${escapeHtml(p.manual_override ? p.manual_online_version : (p.online_version || '-'))}</strong>
               ${p.manual_override ? '<div class="muted" style="font-size:12px;">manuell überschrieben</div>' : ''}
             </td>
             <td>${installCell}</td>
-            <td>${jumpPill(p.version_jump_type, p.version_jump_score)}</td>
-            <td>
-              ${statusPill(p.check_status, p.update_available)}
-              <div class="muted" style="font-size:12px;margin-top:4px;">${escapeHtml(p.check_message || '')}</div>
-            </td>
             <td>${formatDate(p.last_checked)}</td>
-            <td>
-              ${formatDate(p.last_seen_at)}
-              ${p.missing_since ? `<div class="pill red" style="margin-top:5px;">Missing seit ${formatDate(p.missing_since)}</div>` : ''}
-            </td>
-            <td>${sourceLabel}</td>
             <td>${actions}</td>
           </tr>
         `;
@@ -1205,14 +1201,6 @@
         btn.addEventListener('click', () => openSourcesDialog(btn.dataset.sources));
       });
 
-      document.querySelectorAll('[data-save-install]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const packageId = btn.dataset.saveInstall;
-          const input = document.querySelector(`[data-install-input="${CSS.escape(packageId)}"]`);
-          const count = Number(input?.value || 0);
-          saveInstallationCount(packageId, count, btn);
-        });
-      });
     }
 
 async function requestSync(packageId, btn) {
@@ -1281,17 +1269,22 @@ async function requestSync(packageId, btn) {
       }
 
       await loadAll();
+      if (currentSourcesPackageId === packageId && els.sourcesDialog.open) {
+        renderOptionsInstallation();
+        renderSourcesDialog();
+      }
     }
 
     function openSourcesDialog(packageId) {
       currentSourcesPackageId = packageId;
 
       const pkg = packages.find((p) => p.package_id === packageId);
-      els.sourcesTitle.textContent = `Quellen: ${pkg?.name || packageId}`;
-      els.sourcesSubtitle.textContent = `${packageId} · Quellen nach Priorität und Zuverlässigkeit`;
+      els.sourcesTitle.textContent = `Optionen: ${pkg?.name || packageId}`;
+      els.sourcesSubtitle.textContent = `${packageId} · Quellen, Regex und Installationsanzahl bearbeiten`;
 
       setMessage(els.sourcesMessage, '');
       clearNewSourceForm();
+      renderOptionsInstallation();
       renderSourcesDialog();
 
       els.sourcesDialog.showModal();
@@ -1300,6 +1293,14 @@ async function requestSync(packageId, btn) {
     function closeSourcesDialog() {
       els.sourcesDialog.close();
       currentSourcesPackageId = null;
+    }
+
+    function renderOptionsInstallation() {
+      const pkg = packages.find((p) => p.package_id === currentSourcesPackageId);
+      if (!pkg) return;
+
+      els.optionInstallCount.value = Number(pkg.installation_count || 0);
+      els.optionInstallMeta.textContent = `${pkg.installation_count_source || 'manual'} · ${formatDate(pkg.installation_count_updated_at)}`;
     }
 
     function applyNewSourceDefaults() {
