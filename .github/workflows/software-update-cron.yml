@@ -1,0 +1,127 @@
+name: Software Update Manager Cron
+
+on:
+  workflow_dispatch:
+    inputs:
+      enqueue_limit:
+        description: "Wie viele Pakete beim Enqueue-Lauf geprüft werden sollen"
+        required: false
+        default: "200"
+      process_limit:
+        description: "Wie viele Jobs pro Process-Lauf verarbeitet werden sollen"
+        required: false
+        default: "25"
+      enqueue:
+        description: "Auch fällige Pakete einreihen? true/false"
+        required: false
+        default: "true"
+
+  schedule:
+    # Alle 15 Minuten offene Jobs abarbeiten
+    - cron: "*/15 * * * *"
+
+    # Einmal täglich um 02:20 UTC neue fällige Pakete einreihen und danach abarbeiten
+    - cron: "20 2 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: software-update-manager-cron
+  cancel-in-progress: false
+
+env:
+  FUNCTIONS_BASE_URL: "https://jgzuuanvrcmgbwtbnmrj.functions.supabase.co"
+  ENQUEUE_LIMIT: ${{ github.event.inputs.enqueue_limit || '200' }}
+  PROCESS_LIMIT: ${{ github.event.inputs.process_limit || '25' }}
+  MANUAL_ENQUEUE: ${{ github.event.inputs.enqueue || 'true' }}
+
+jobs:
+  cron:
+    name: Run Software Update Manager cron
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Decide mode
+        id: mode
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          should_enqueue="false"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${MANUAL_ENQUEUE}" = "true" ]; then
+            should_enqueue="true"
+          fi
+
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" = "20 2 * * *" ]; then
+            should_enqueue="true"
+          fi
+
+          echo "should_enqueue=${should_enqueue}" >> "$GITHUB_OUTPUT"
+          echo "Should enqueue: ${should_enqueue}"
+
+      - name: Call enqueue-stale-checks
+        if: steps.mode.outputs.should_enqueue == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Calling enqueue-stale-checks with limit=${ENQUEUE_LIMIT}"
+
+          response_file="$(mktemp)"
+          status_code="$(
+            curl -sS \
+              -X POST "${FUNCTIONS_BASE_URL}/enqueue-stale-checks" \
+              -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+              -H "apikey: $SUPABASE_ANON_KEY" \
+              -H "Content-Type: application/json" \
+              -H "x-process-secret: $PROCESS_CHECK_JOBS_SECRET" \
+              --data-binary "{\"limit\":${ENQUEUE_LIMIT},\"priority\":10}" \
+              -o "$response_file" \
+              -w "%{http_code}"
+          )"
+
+          echo "HTTP status: ${status_code}"
+          cat "$response_file"
+          echo
+
+          if [ "$status_code" -lt 200 ] || [ "$status_code" -ge 300 ]; then
+            echo "enqueue-stale-checks failed"
+            exit 1
+          fi
+        env:
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          PROCESS_CHECK_JOBS_SECRET: ${{ secrets.PROCESS_CHECK_JOBS_SECRET }}
+
+      - name: Call process-check-jobs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Calling process-check-jobs with limit=${PROCESS_LIMIT}"
+
+          response_file="$(mktemp)"
+          status_code="$(
+            curl -sS \
+              -X POST "${FUNCTIONS_BASE_URL}/process-check-jobs" \
+              -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+              -H "apikey: $SUPABASE_ANON_KEY" \
+              -H "Content-Type: application/json" \
+              -H "x-process-secret: $PROCESS_CHECK_JOBS_SECRET" \
+              --data-binary "{\"limit\":${PROCESS_LIMIT}}" \
+              -o "$response_file" \
+              -w "%{http_code}"
+          )"
+
+          echo "HTTP status: ${status_code}"
+          cat "$response_file"
+          echo
+
+          if [ "$status_code" -lt 200 ] || [ "$status_code" -ge 300 ]; then
+            echo "process-check-jobs failed"
+            exit 1
+          fi
+        env:
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          PROCESS_CHECK_JOBS_SECRET: ${{ secrets.PROCESS_CHECK_JOBS_SECRET }}
