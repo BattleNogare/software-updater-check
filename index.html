@@ -450,7 +450,7 @@
 
     .source-grid {
       display: grid;
-      grid-template-columns: 90px 160px 1fr 90px 90px 90px auto;
+      grid-template-columns: 80px 150px minmax(220px, 1fr) 170px minmax(220px, 1fr) 85px 85px 85px auto;
       gap: 8px;
       align-items: center;
       margin-bottom: 8px;
@@ -458,6 +458,16 @@
       border: 1px solid rgba(148, 163, 184, 0.14);
       border-radius: 14px;
       background: rgba(15, 23, 42, 0.42);
+    }
+
+    .source-field-caption {
+      color: var(--muted);
+      font-size: 11px;
+      margin: 0 0 4px;
+    }
+
+    .source-cell {
+      min-width: 0;
     }
 
     .source-note-row {
@@ -678,6 +688,25 @@
         <input id="newSourceUrl" class="input" placeholder="https://..." />
       </div>
 
+      <div style="display:grid;grid-template-columns:220px 1fr;gap:10px;">
+        <div class="field">
+          <label>Versions-Selector</label>
+          <select id="newSourceVersionSelector" class="select">
+            <option value="tag">tag</option>
+            <option value="release_name">release_name</option>
+            <option value="brave_chromium_composite">brave_chromium_composite</option>
+            <option value="html_regex">html_regex</option>
+            <option value="download_url_regex">download_url_regex</option>
+            <option value="winget_id">winget_id</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Versions-Pattern / Regex</label>
+          <input id="newSourceVersionPattern" class="input" placeholder="z. B. ([0-9]+\\.[0-9]+\\.[0-9]+)\\s+Release\\s+Notes" />
+        </div>
+      </div>
+
       <div class="field">
         <label>Hinweis</label>
         <textarea id="newSourceNote" class="textarea" placeholder="z. B. Nur stabile Releases, keine Beta/Nightly-Versionen."></textarea>
@@ -768,6 +797,8 @@
       closeSourcesBtn2: $('closeSourcesBtn2'),
       newSourceType: $('newSourceType'),
       newSourceUrl: $('newSourceUrl'),
+      newSourceVersionSelector: $('newSourceVersionSelector'),
+      newSourceVersionPattern: $('newSourceVersionPattern'),
       newSourceNote: $('newSourceNote'),
       newSourcePriority: $('newSourcePriority'),
       newSourceReliability: $('newSourceReliability'),
@@ -866,6 +897,7 @@
       els.closeSourcesBtn.addEventListener('click', closeSourcesDialog);
       els.closeSourcesBtn2.addEventListener('click', closeSourcesDialog);
       els.addSourceBtn.addEventListener('click', addSource);
+      els.newSourceType.addEventListener('change', applyNewSourceDefaults);
 
       const { data } = await sb.auth.getSession();
       if (data.session) {
@@ -1052,7 +1084,7 @@
       if (q) {
         rows = rows.filter((p) => {
           const src = sourcesByPackage[p.package_id] || [];
-          const sourceText = src.map((s) => `${s.source_type} ${s.source_url} ${s.source_note || ''}`).join(' ');
+          const sourceText = src.map((s) => `${s.source_type} ${s.source_url} ${s.version_selector || ''} ${s.version_pattern || ''} ${s.source_note || ''}`).join(' ');
 
           const haystack = [
             p.name,
@@ -1104,7 +1136,7 @@
         const firstSource = src[0];
 
         const sourceLabel = firstSource
-          ? `<div>${escapeHtml(firstSource.source_type)}</div><div class="muted">${escapeHtml(firstSource.source_url)}</div>`
+          ? `<div>${escapeHtml(firstSource.source_type)}</div><div class="muted">${escapeHtml(firstSource.source_url)}</div>${firstSource.version_selector ? `<div class="muted" style="font-size:12px;margin-top:3px;">${escapeHtml(firstSource.version_selector)}${firstSource.version_pattern ? ` · ${escapeHtml(firstSource.version_pattern)}` : ''}</div>` : ''}`
           : `<span class="muted">Keine Quelle</span>`;
 
         const installCell = canMaintain()
@@ -1270,9 +1302,25 @@ async function requestSync(packageId, btn) {
       currentSourcesPackageId = null;
     }
 
+    function applyNewSourceDefaults() {
+      const type = els.newSourceType.value;
+
+      if (type === 'github_releases') {
+        els.newSourceVersionSelector.value = 'tag';
+      } else if (type === 'winget') {
+        els.newSourceVersionSelector.value = 'winget_id';
+      } else if (type === 'vendor_release_notes' || type === 'vendor_download_page' || type === 'vendor_changelog' || type === 'custom_url') {
+        els.newSourceVersionSelector.value = 'html_regex';
+      } else {
+        els.newSourceVersionSelector.value = '';
+      }
+    }
+
     function clearNewSourceForm() {
       els.newSourceType.value = 'vendor_release_notes';
       els.newSourceUrl.value = '';
+      els.newSourceVersionSelector.value = 'html_regex';
+      els.newSourceVersionPattern.value = '';
       els.newSourceNote.value = '';
       els.newSourcePriority.value = '1';
       els.newSourceReliability.value = '50';
@@ -1290,17 +1338,53 @@ async function requestSync(packageId, btn) {
 
       els.sourcesList.innerHTML = sources.map((s) => `
         <div class="source-grid" data-source-row="${s.id}">
-          <input class="input" type="number" min="1" value="${s.priority ?? 1}" data-source-field="priority" data-source-id="${s.id}">
-          <select class="select" data-source-field="source_type" data-source-id="${s.id}">
-            ${sourceTypeOptions(s.source_type)}
-          </select>
-          <input class="input" value="${escapeHtml(s.source_url || '')}" data-source-field="source_url" data-source-id="${s.id}">
-          <input class="input" type="number" min="0" max="100" value="${s.reliability_score ?? 50}" data-source-field="reliability_score" data-source-id="${s.id}">
-          <input class="input" type="number" min="1" value="${s.check_interval_hours ?? 24}" data-source-field="check_interval_hours" data-source-id="${s.id}">
-          <select class="select" data-source-field="enabled" data-source-id="${s.id}">
-            <option value="true" ${s.enabled ? 'selected' : ''}>Aktiv</option>
-            <option value="false" ${!s.enabled ? 'selected' : ''}>Inaktiv</option>
-          </select>
+          <div class="source-cell">
+            <div class="source-field-caption">Priorität</div>
+            <input class="input" type="number" min="1" value="${s.priority ?? 1}" data-source-field="priority" data-source-id="${s.id}">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Typ</div>
+            <select class="select" data-source-field="source_type" data-source-id="${s.id}">
+              ${sourceTypeOptions(s.source_type)}
+            </select>
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">URL</div>
+            <input class="input" value="${escapeHtml(s.source_url || '')}" data-source-field="source_url" data-source-id="${s.id}">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Versions-Selector</div>
+            <select class="select" data-source-field="version_selector" data-source-id="${s.id}">
+              ${versionSelectorOptions(s.version_selector)}
+            </select>
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Pattern / Regex</div>
+            <input class="input" value="${escapeHtml(s.version_pattern || '')}" data-source-field="version_pattern" data-source-id="${s.id}" placeholder="([0-9]+\\.[0-9]+\\.[0-9]+)">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Zuverl.</div>
+            <input class="input" type="number" min="0" max="100" value="${s.reliability_score ?? 50}" data-source-field="reliability_score" data-source-id="${s.id}">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Intervall</div>
+            <input class="input" type="number" min="1" value="${s.check_interval_hours ?? 24}" data-source-field="check_interval_hours" data-source-id="${s.id}">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Aktiv</div>
+            <select class="select" data-source-field="enabled" data-source-id="${s.id}">
+              <option value="true" ${s.enabled ? 'selected' : ''}>Ja</option>
+              <option value="false" ${!s.enabled ? 'selected' : ''}>Nein</option>
+            </select>
+          </div>
+
           <div class="row-actions">
             ${canMaintain() ? `
               <button class="btn secondary small" data-save-source="${s.id}">Speichern</button>
@@ -1339,6 +1423,23 @@ async function requestSync(packageId, btn) {
       return types.map((t) => `<option value="${t}" ${t === selected ? 'selected' : ''}>${t}</option>`).join('');
     }
 
+    function versionSelectorOptions(selected) {
+      const selectors = [
+        '',
+        'tag',
+        'release_name',
+        'brave_chromium_composite',
+        'html_regex',
+        'download_url_regex',
+        'winget_id'
+      ];
+
+      return selectors.map((t) => {
+        const label = t || 'Automatisch / leer';
+        return `<option value="${t}" ${t === (selected || '') ? 'selected' : ''}>${label}</option>`;
+      }).join('');
+    }
+
     async function addSource() {
       if (!canMaintain()) return;
 
@@ -1346,6 +1447,8 @@ async function requestSync(packageId, btn) {
         package_id: currentSourcesPackageId,
         source_type: els.newSourceType.value,
         source_url: els.newSourceUrl.value.trim(),
+        version_selector: els.newSourceVersionSelector.value || null,
+        version_pattern: els.newSourceVersionPattern.value.trim() || null,
         source_note: els.newSourceNote.value.trim() || null,
         priority: Number(els.newSourcePriority.value || 1),
         reliability_score: Number(els.newSourceReliability.value || 50),
@@ -1360,6 +1463,16 @@ async function requestSync(packageId, btn) {
 
       if (payload.source_type === 'ai_search_fallback' && !payload.source_url) {
         payload.source_url = 'ai://search-fallback';
+      }
+
+      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'download_url_regex') && !payload.version_pattern) {
+        setMessage(els.sourcesMessage, 'Für html_regex oder download_url_regex bitte ein Versions-Pattern eintragen.', 'error');
+        return;
+      }
+
+      if (payload.source_type === 'winget' && !payload.version_pattern) {
+        setMessage(els.sourcesMessage, 'Für Winget bitte den Winget-Identifier als Versions-Pattern eintragen, z. B. 7zip.7zip.', 'error');
+        return;
       }
 
       els.addSourceBtn.disabled = true;
@@ -1392,6 +1505,8 @@ async function requestSync(packageId, btn) {
         priority: Number(read('priority') || 1),
         source_type: read('source_type'),
         source_url: read('source_url')?.trim(),
+        version_selector: read('version_selector') || null,
+        version_pattern: read('version_pattern')?.trim() || null,
         reliability_score: Number(read('reliability_score') || 50),
         check_interval_hours: Number(read('check_interval_hours') || 24),
         enabled: read('enabled') === 'true',
@@ -1400,6 +1515,16 @@ async function requestSync(packageId, btn) {
 
       if (!payload.source_url && payload.source_type !== 'ai_search_fallback') {
         alert('Bitte eine URL eintragen.');
+        return;
+      }
+
+      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'download_url_regex') && !payload.version_pattern) {
+        alert('Für html_regex oder download_url_regex bitte ein Versions-Pattern eintragen.');
+        return;
+      }
+
+      if (payload.source_type === 'winget' && !payload.version_pattern) {
+        alert('Für Winget bitte den Winget-Identifier als Versions-Pattern eintragen, z. B. 7zip.7zip.');
         return;
       }
 
