@@ -1183,26 +1183,46 @@
       });
     }
 
-    async function requestSync(packageId, btn) {
-      if (!canMaintain()) return;
+async function requestSync(packageId, btn) {
+  if (!canMaintain()) return;
 
-      btn.disabled = true;
-      btn.textContent = 'Queued ...';
+  btn.disabled = true;
+  btn.textContent = 'Queued ...';
 
-      const { data, error } = await sb.rpc('request_package_check', {
-        target_package_id: packageId
-      });
+  const { data, error } = await sb.rpc('request_package_check', {
+    target_package_id: packageId
+  });
 
-      if (error) {
-        alert(`Fehler beim Sync-Job: ${error.message}`);
-        btn.disabled = false;
-        btn.textContent = 'Sync';
-        return;
-      }
+  if (error) {
+    alert(`Fehler beim Sync-Job: ${error.message}`);
+    btn.disabled = false;
+    btn.textContent = 'Sync';
+    return;
+  }
 
-      alert(`Sync-Job wurde erstellt. Job-ID: ${data}`);
-      await loadAll();
+  btn.textContent = 'Prüfe ...';
+
+  const { data: fnData, error: fnError } = await sb.functions.invoke('process-check-jobs', {
+    body: {
+      limit: 5
     }
+  });
+
+  if (fnError) {
+    alert(`Sync-Job wurde erstellt, aber die Verarbeitung konnte nicht gestartet werden: ${fnError.message}`);
+    btn.disabled = false;
+    btn.textContent = 'Sync';
+    await loadAll();
+    return;
+  }
+
+  console.log('process-check-jobs result:', fnData);
+
+  await loadAll();
+
+  btn.disabled = false;
+  btn.textContent = 'Sync';
+}
 
     async function saveInstallationCount(packageId, count, btn) {
       if (!canMaintain()) return;
