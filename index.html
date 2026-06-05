@@ -494,6 +494,120 @@
       padding: 1px 5px;
     }
 
+
+    .status-details-card {
+      margin-bottom: 18px;
+    }
+
+    .status-detail-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+      margin-bottom: 10px;
+    }
+
+    .status-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 10px 0 12px;
+    }
+
+    .status-detail-box {
+      border: 1px solid rgba(229, 229, 229, 0.12);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .status-detail-box .caption {
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .status-detail-box .content {
+      color: var(--text);
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .check-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .check-item {
+      border: 1px solid rgba(229, 229, 229, 0.12);
+      border-radius: 14px;
+      background: rgba(10, 10, 10, 0.42);
+      padding: 12px;
+    }
+
+    .check-item-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .check-title {
+      font-weight: 800;
+      color: white;
+    }
+
+    .check-message {
+      line-height: 1.45;
+      color: #e5e5e5;
+      margin-top: 6px;
+      white-space: pre-wrap;
+    }
+
+    .check-error {
+      margin-top: 8px;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      background: rgba(239, 68, 68, 0.10);
+      color: #fecaca;
+      border-radius: 10px;
+      padding: 9px 10px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    details.check-raw {
+      margin-top: 8px;
+      color: var(--muted);
+    }
+
+    details.check-raw summary {
+      cursor: pointer;
+      user-select: none;
+      font-weight: 700;
+    }
+
+    details.check-raw pre {
+      max-height: 280px;
+      overflow: auto;
+      border: 1px solid rgba(229, 229, 229, 0.12);
+      background: rgba(0, 0, 0, 0.36);
+      border-radius: 10px;
+      padding: 10px;
+      color: #e5e5e5;
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+
     .dialog-footer {
       padding: 16px 20px 20px;
       border-top: 1px solid var(--border);
@@ -540,6 +654,10 @@
 
       .source-note-row {
         grid-column: auto;
+      }
+
+      .status-detail-grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -694,6 +812,13 @@
         <div id="optionInstallMeta" class="muted" style="font-size:12px;margin-top:8px;"></div>
       </section>
 
+      <section class="card status-details-card">
+        <div class="label">Statusdetails</div>
+        <div id="optionStatusDetails" class="option-status-details">
+          <div class="muted" style="margin-top:8px;">Statusdetails werden geladen ...</div>
+        </div>
+      </section>
+
       <h3 style="margin:0 0 14px;">Quellen</h3>
       <div id="sourcesList"></div>
 
@@ -790,6 +915,7 @@
     let currentRole = 'viewer';
     let packages = [];
     let sourcesByPackage = {};
+    let optionChecks = [];
     let sortKey = 'version_jump_score';
     let sortDir = 'desc';
     let currentSourcesPackageId = null;
@@ -843,7 +969,8 @@
       sourcesMessage: $('sourcesMessage'),
       optionInstallCount: $('optionInstallCount'),
       optionInstallMeta: $('optionInstallMeta'),
-      saveOptionInstallBtn: $('saveOptionInstallBtn')
+      saveOptionInstallBtn: $('saveOptionInstallBtn'),
+      optionStatusDetails: $('optionStatusDetails')
     };
 
     function canMaintain() {
@@ -1310,9 +1437,12 @@ async function requestSync(packageId, btn) {
       setMessage(els.sourcesMessage, '');
       clearNewSourceForm();
       renderOptionsInstallation();
+      optionChecks = [];
+      renderOptionStatusDetails();
       renderSourcesDialog();
 
       els.sourcesDialog.showModal();
+      loadOptionChecks(packageId);
     }
 
     function closeSourcesDialog() {
@@ -1326,6 +1456,142 @@ async function requestSync(packageId, btn) {
 
       els.optionInstallCount.value = Number(pkg.installation_count || 0);
       els.optionInstallMeta.textContent = `${pkg.installation_count_source || 'manual'} · ${formatDate(pkg.installation_count_updated_at)}`;
+    }
+
+    function safeJson(value) {
+      if (value === null || value === undefined) return '';
+      try {
+        if (typeof value === 'string') {
+          try {
+            return JSON.stringify(JSON.parse(value), null, 2);
+          } catch {
+            return value;
+          }
+        }
+        return JSON.stringify(value, null, 2);
+      } catch {
+        return String(value);
+      }
+    }
+
+    async function loadOptionChecks(packageId) {
+      if (!packageId) return;
+
+      els.optionStatusDetails.innerHTML = '<div class="muted" style="margin-top:8px;">Lade ausführliche Statusdetails ...</div>';
+
+      const { data, error } = await sb
+        .from('package_checks')
+        .select('*')
+        .eq('package_id', packageId)
+        .order('checked_at', { ascending: false })
+        .limit(5);
+
+      if (error) {
+        optionChecks = [];
+        renderOptionStatusDetails(error.message);
+        return;
+      }
+
+      optionChecks = data || [];
+      renderOptionStatusDetails();
+    }
+
+    function renderOptionStatusDetails(loadError = '') {
+      const pkg = packages.find((p) => p.package_id === currentSourcesPackageId);
+      if (!pkg) {
+        els.optionStatusDetails.innerHTML = '<div class="muted" style="margin-top:8px;">Kein Paket geladen.</div>';
+        return;
+      }
+
+      const packageMessages = [
+        pkg.check_message,
+        pkg.version_compare_message
+      ].filter(Boolean);
+
+      const packageMessageHtml = packageMessages.length
+        ? packageMessages.map((msg) => `<div class="check-message">${escapeHtml(msg)}</div>`).join('')
+        : '<div class="muted">Keine Statusmeldung am Paket hinterlegt.</div>';
+
+      const loadErrorHtml = loadError
+        ? `<div class="check-error">Fehler beim Laden der package_checks: ${escapeHtml(loadError)}</div>`
+        : '';
+
+      const checksHtml = optionChecks.length
+        ? `
+          <div class="check-list">
+            ${optionChecks.map((check) => {
+              const hasError = check.error_type || check.error_detail;
+              const raw = safeJson(check.raw_result);
+              return `
+                <div class="check-item">
+                  <div class="check-item-head">
+                    <div>
+                      <div class="check-title">Check vom ${formatDate(check.checked_at)}</div>
+                      <div class="muted" style="font-size:12px;margin-top:3px;">
+                        Methode: ${escapeHtml(check.version_compare_method || '-')} · Confidence: ${escapeHtml(check.confidence || '-')}
+                      </div>
+                    </div>
+                    ${statusPill(check.update_available ? 'update_available' : (check.error_type ? 'failed' : 'up_to_date'), check.update_available)}
+                  </div>
+
+                  <div class="status-detail-grid" style="margin-top:8px;">
+                    <div class="status-detail-box">
+                      <div class="caption">Lokale Version</div>
+                      <div class="content">${escapeHtml(check.local_version || '-')}</div>
+                    </div>
+                    <div class="status-detail-box">
+                      <div class="caption">Online-Version</div>
+                      <div class="content">${escapeHtml(check.online_version || '-')}</div>
+                    </div>
+                    <div class="status-detail-box">
+                      <div class="caption">Versionssprung</div>
+                      <div class="content">${escapeHtml(check.version_jump_type || '-')} · ${Number(check.version_jump_score || 0)}</div>
+                    </div>
+                    <div class="status-detail-box">
+                      <div class="caption">Quelle</div>
+                      <div class="content">${escapeHtml(check.source_url || '-')}</div>
+                    </div>
+                  </div>
+
+                  ${check.message ? `<div class="check-message">${escapeHtml(check.message)}</div>` : ''}
+                  ${hasError ? `<div class="check-error"><strong>${escapeHtml(check.error_type || 'Fehler')}</strong>${check.error_detail ? `\n${escapeHtml(check.error_detail)}` : ''}</div>` : ''}
+                  ${raw ? `<details class="check-raw"><summary>Rohdaten / Debug anzeigen</summary><pre>${escapeHtml(raw)}</pre></details>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `
+        : '<div class="muted" style="margin-top:12px;">Noch keine ausführlichen package_checks für dieses Paket vorhanden.</div>';
+
+      els.optionStatusDetails.innerHTML = `
+        <div class="status-detail-head">
+          <div>${statusPill(pkg.check_status, pkg.update_available)}</div>
+          <div class="muted" style="font-size:12px;">Letzte Abfrage: ${formatDate(pkg.last_checked)}</div>
+        </div>
+
+        <div class="status-detail-grid">
+          <div class="status-detail-box">
+            <div class="caption">Paket-ID</div>
+            <div class="content">${escapeHtml(pkg.package_id)}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Lokale Version</div>
+            <div class="content">${escapeHtml(pkg.local_version || '-')}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Online-Version</div>
+            <div class="content">${escapeHtml(pkg.manual_override ? pkg.manual_online_version : (pkg.online_version || '-'))}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Vergleich</div>
+            <div class="content">${escapeHtml(pkg.version_jump_type || '-')} · ${Number(pkg.version_jump_score || 0)}</div>
+          </div>
+        </div>
+
+        ${packageMessageHtml}
+        ${loadErrorHtml}
+        ${checksHtml}
+      `;
     }
 
     function applyNewSourceDefaults() {
@@ -1353,7 +1619,7 @@ async function requestSync(packageId, btn) {
           XPath, Regex-Gruppe und Download-Website kannst du im Hinweisfeld speichern, z. B. <code>XPath: ...</code>, <code>Regex-Gruppe: 1</code>, <code>Download: https://...</code>.
         `;
         if (!els.newSourceVersionPattern.value) {
-          els.newSourceVersionPattern.value = '/Version 20([\\d.]+)/';
+          els.newSourceVersionPattern.value = '/Version\\s+([\\d.]+)/';
         }
         return;
       }
