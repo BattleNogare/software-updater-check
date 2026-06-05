@@ -410,13 +410,14 @@
     }
 
     dialog {
-      width: min(980px, calc(100% - 24px));
+      width: min(1700px, calc(100% - 18px));
       border: 1px solid var(--border);
       border-radius: 20px;
       padding: 0;
       background: var(--panel);
       color: var(--text);
       box-shadow: var(--shadow);
+      max-width: calc(100vw - 18px);
     }
 
     dialog::backdrop {
@@ -450,7 +451,7 @@
 
     .source-grid {
       display: grid;
-      grid-template-columns: 80px 150px minmax(220px, 1fr) 170px minmax(220px, 1fr) 85px 85px 85px auto;
+      grid-template-columns: 78px 145px minmax(260px, 1fr) 190px minmax(280px, 1fr) 82px 82px 78px auto;
       gap: 8px;
       align-items: center;
       margin-bottom: 8px;
@@ -472,6 +473,25 @@
 
     .source-note-row {
       grid-column: 1 / -1;
+    }
+
+    .source-help {
+      margin-top: -6px;
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border: 1px solid rgba(229, 229, 229, 0.12);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .source-help code {
+      color: var(--text);
+      background: rgba(255,255,255,0.08);
+      border-radius: 6px;
+      padding: 1px 5px;
     }
 
     .dialog-footer {
@@ -709,6 +729,7 @@
             <option value="html_regex">html_regex</option>
             <option value="download_url_regex">download_url_regex</option>
             <option value="winget_id">winget_id</option>
+            <option value="winst-manager">winst-manager</option>
           </select>
         </div>
 
@@ -718,9 +739,11 @@
         </div>
       </div>
 
+      <div id="newSourceSelectorHelp" class="source-help"></div>
+
       <div class="field">
         <label>Hinweis</label>
-        <textarea id="newSourceNote" class="textarea" placeholder="z. B. Nur stabile Releases, keine Beta/Nightly-Versionen."></textarea>
+        <textarea id="newSourceNote" class="textarea" placeholder="z. B. Nur stabile Releases, keine Beta/Nightly-Versionen. Für winst-manager: XPath, Regex-Gruppe und Download-Website eintragen."></textarea>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
@@ -810,6 +833,7 @@
       newSourceUrl: $('newSourceUrl'),
       newSourceVersionSelector: $('newSourceVersionSelector'),
       newSourceVersionPattern: $('newSourceVersionPattern'),
+      newSourceSelectorHelp: $('newSourceSelectorHelp'),
       newSourceNote: $('newSourceNote'),
       newSourcePriority: $('newSourcePriority'),
       newSourceReliability: $('newSourceReliability'),
@@ -917,6 +941,7 @@
         saveInstallationCount(currentSourcesPackageId, count, els.saveOptionInstallBtn);
       });
       els.newSourceType.addEventListener('change', applyNewSourceDefaults);
+      els.newSourceVersionSelector.addEventListener('change', updateNewSourceSelectorHelp);
 
       const { data } = await sb.auth.getSession();
       if (data.session) {
@@ -1315,6 +1340,40 @@ async function requestSync(packageId, btn) {
       } else {
         els.newSourceVersionSelector.value = '';
       }
+
+      updateNewSourceSelectorHelp();
+    }
+
+    function updateNewSourceSelectorHelp() {
+      const selector = els.newSourceVersionSelector.value;
+
+      if (selector === 'winst-manager') {
+        els.newSourceSelectorHelp.innerHTML = `
+          <strong>winst-manager:</strong> URL = Website mit Versionsanzeige, Pattern = Regex mit Gruppe 1, z. B. <code>/Version 20([\\d.]+)/</code>.<br>
+          XPath, Regex-Gruppe und Download-Website kannst du im Hinweisfeld speichern, z. B. <code>XPath: ...</code>, <code>Regex-Gruppe: 1</code>, <code>Download: https://...</code>.
+        `;
+        if (!els.newSourceVersionPattern.value) {
+          els.newSourceVersionPattern.value = '/Version 20([\\d.]+)/';
+        }
+        return;
+      }
+
+      if (selector === 'html_regex') {
+        els.newSourceSelectorHelp.innerHTML = 'HTML-Seite laden und Version per Regex aus HTML/Text extrahieren. Die erste Capture-Gruppe wird als Version genutzt.';
+        return;
+      }
+
+      if (selector === 'download_url_regex') {
+        els.newSourceSelectorHelp.innerHTML = 'Version direkt aus der URL per Regex extrahieren. Die erste Capture-Gruppe wird als Version genutzt.';
+        return;
+      }
+
+      if (selector === 'winget_id') {
+        els.newSourceSelectorHelp.innerHTML = 'Für Winget muss im Pattern der Winget-Identifier stehen, z. B. <code>Adobe.Acrobat.Reader.64-bit</code>.';
+        return;
+      }
+
+      els.newSourceSelectorHelp.textContent = 'Für GitHub-Releases reicht meistens tag. Für Sonderfälle kann ein spezieller Selector genutzt werden.';
     }
 
     function clearNewSourceForm() {
@@ -1327,6 +1386,7 @@ async function requestSync(packageId, btn) {
       els.newSourceReliability.value = '50';
       els.newSourceInterval.value = '24';
       els.newSourceEnabled.value = 'true';
+      updateNewSourceSelectorHelp();
     }
 
     function renderSourcesDialog() {
@@ -1432,7 +1492,8 @@ async function requestSync(packageId, btn) {
         'brave_chromium_composite',
         'html_regex',
         'download_url_regex',
-        'winget_id'
+        'winget_id',
+        'winst-manager'
       ];
 
       return selectors.map((t) => {
@@ -1466,8 +1527,12 @@ async function requestSync(packageId, btn) {
         payload.source_url = 'ai://search-fallback';
       }
 
-      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'download_url_regex') && !payload.version_pattern) {
-        setMessage(els.sourcesMessage, 'Für html_regex oder download_url_regex bitte ein Versions-Pattern eintragen.', 'error');
+      if (payload.version_selector === 'winst-manager' && !payload.source_note) {
+        payload.source_note = 'XPath: /html/body/div[64]/div/main/div[2]/div[2]/section/div[1]/div/div[2]/header/div/span\nRegex-Gruppe: 1\nDownload: https://www.adobe.com/devnet-docs/acrobatetk/tools/ReleaseNotesDC/index.html#continuous-track';
+      }
+
+      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'download_url_regex' || payload.version_selector === 'winst-manager') && !payload.version_pattern) {
+        setMessage(els.sourcesMessage, 'Für html_regex, download_url_regex oder winst-manager bitte ein Versions-Pattern eintragen.', 'error');
         return;
       }
 
@@ -1519,8 +1584,8 @@ async function requestSync(packageId, btn) {
         return;
       }
 
-      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'download_url_regex') && !payload.version_pattern) {
-        alert('Für html_regex oder download_url_regex bitte ein Versions-Pattern eintragen.');
+      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'download_url_regex' || payload.version_selector === 'winst-manager') && !payload.version_pattern) {
+        alert('Für html_regex, download_url_regex oder winst-manager bitte ein Versions-Pattern eintragen.');
         return;
       }
 
