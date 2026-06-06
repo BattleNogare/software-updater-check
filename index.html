@@ -451,7 +451,7 @@
 
     .source-grid {
       display: grid;
-      grid-template-columns: 78px 145px minmax(260px, 1fr) 190px minmax(280px, 1fr) 82px 82px 78px auto;
+      grid-template-columns: 78px 145px minmax(240px, 1fr) 180px minmax(240px, 1fr) 150px 82px 82px 78px auto;
       gap: 8px;
       align-items: center;
       margin-bottom: 8px;
@@ -844,7 +844,7 @@
         <input id="newSourceUrl" class="input" placeholder="https://..." />
       </div>
 
-      <div style="display:grid;grid-template-columns:220px 1fr;gap:10px;">
+      <div style="display:grid;grid-template-columns:220px 1fr 220px;gap:10px;">
         <div class="field">
           <label>Versions-Selector</label>
           <select id="newSourceVersionSelector" class="select">
@@ -861,6 +861,11 @@
         <div class="field">
           <label>Versions-Pattern / Regex</label>
           <input id="newSourceVersionPattern" class="input" placeholder="z. B. ([0-9]+\\.[0-9]+\\.[0-9]+)\\s+Release\\s+Notes" />
+        </div>
+
+        <div class="field">
+          <label>Versions-Template</label>
+          <input id="newSourceVersionTemplate" class="input" placeholder="z. B. $1.$2" />
         </div>
       </div>
 
@@ -959,6 +964,7 @@
       newSourceUrl: $('newSourceUrl'),
       newSourceVersionSelector: $('newSourceVersionSelector'),
       newSourceVersionPattern: $('newSourceVersionPattern'),
+      newSourceVersionTemplate: $('newSourceVersionTemplate'),
       newSourceSelectorHelp: $('newSourceSelectorHelp'),
       newSourceNote: $('newSourceNote'),
       newSourcePriority: $('newSourcePriority'),
@@ -1255,7 +1261,7 @@
       if (q) {
         rows = rows.filter((p) => {
           const src = sourcesByPackage[p.package_id] || [];
-          const sourceText = src.map((s) => `${s.source_type} ${s.source_url} ${s.version_selector || ''} ${s.version_pattern || ''} ${s.source_note || ''}`).join(' ');
+          const sourceText = src.map((s) => `${s.source_type} ${s.source_url} ${s.version_selector || ''} ${s.version_pattern || ''} ${s.version_template || ''} ${s.source_note || ''}`).join(' ');
 
           const haystack = [
             p.name,
@@ -1625,12 +1631,12 @@ async function requestSync(packageId, btn) {
       }
 
       if (selector === 'html_regex') {
-        els.newSourceSelectorHelp.innerHTML = 'HTML-Seite laden und Version per Regex aus HTML/Text extrahieren. Die erste Capture-Gruppe wird als Version genutzt.';
+        els.newSourceSelectorHelp.innerHTML = 'HTML-Seite laden und Version per Regex aus HTML/Text extrahieren. Standardmäßig wird die erste Capture-Gruppe als Version genutzt. Optional kannst du mit Versions-Template Gruppen zusammensetzen, z. B. <code>$1.$2</code>.';
         return;
       }
 
       if (selector === 'download_url_regex') {
-        els.newSourceSelectorHelp.innerHTML = 'Version direkt aus der URL per Regex extrahieren. Die erste Capture-Gruppe wird als Version genutzt.';
+        els.newSourceSelectorHelp.innerHTML = 'Version direkt aus der URL per Regex extrahieren. Standardmäßig wird die erste Capture-Gruppe als Version genutzt. Optional kannst du mit Versions-Template Gruppen zusammensetzen, z. B. <code>$1.$2</code>.';
         return;
       }
 
@@ -1647,6 +1653,7 @@ async function requestSync(packageId, btn) {
       els.newSourceUrl.value = '';
       els.newSourceVersionSelector.value = 'html_regex';
       els.newSourceVersionPattern.value = '';
+      els.newSourceVersionTemplate.value = '';
       els.newSourceNote.value = '';
       els.newSourcePriority.value = '1';
       els.newSourceReliability.value = '50';
@@ -1692,6 +1699,11 @@ async function requestSync(packageId, btn) {
           <div class="source-cell">
             <div class="source-field-caption">Pattern / Regex</div>
             <input class="input" value="${escapeHtml(s.version_pattern || '')}" data-source-field="version_pattern" data-source-id="${s.id}" placeholder="([0-9]+\\.[0-9]+\\.[0-9]+)">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Template</div>
+            <input class="input" value="${escapeHtml(s.version_template || '')}" data-source-field="version_template" data-source-id="${s.id}" placeholder="$1.$2">
           </div>
 
           <div class="source-cell">
@@ -1777,6 +1789,7 @@ async function requestSync(packageId, btn) {
         source_url: els.newSourceUrl.value.trim(),
         version_selector: els.newSourceVersionSelector.value || null,
         version_pattern: els.newSourceVersionPattern.value.trim() || null,
+        version_template: els.newSourceVersionTemplate.value.trim() || null,
         source_note: els.newSourceNote.value.trim() || null,
         priority: Number(els.newSourcePriority.value || 1),
         reliability_score: Number(els.newSourceReliability.value || 50),
@@ -1839,6 +1852,7 @@ async function requestSync(packageId, btn) {
         source_url: read('source_url')?.trim(),
         version_selector: read('version_selector') || null,
         version_pattern: read('version_pattern')?.trim() || null,
+        version_template: read('version_template')?.trim() || null,
         reliability_score: Number(read('reliability_score') || 50),
         check_interval_hours: Number(read('check_interval_hours') || 24),
         enabled: read('enabled') === 'true',
