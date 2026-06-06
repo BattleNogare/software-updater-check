@@ -852,6 +852,7 @@
             <option value="release_name">release_name</option>
             <option value="brave_chromium_composite">brave_chromium_composite</option>
             <option value="html_regex">html_regex</option>
+            <option value="html_deep_regex">html_deep_regex</option>
             <option value="download_url_regex">download_url_regex</option>
             <option value="winget_id">winget_id</option>
             <option value="winst-manager">winst-manager</option>
@@ -1635,6 +1636,11 @@ async function requestSync(packageId, btn) {
         return;
       }
 
+      if (selector === 'html_deep_regex') {
+        els.newSourceSelectorHelp.innerHTML = 'HTML-Deep-Regex: durchsucht zuerst Roh-HTML, Text und finale URL. Falls dort nichts gefunden wird, lädt die Edge Function zusätzlich same-origin JavaScript-Chunks und sucht dort weiter. Sinnvoll für Next.js/React-Seiten, bei denen Versionen in JS-Chunks oder Attributen stecken. Versions-Template wie <code>$1.$2</code> wird unterstützt.';
+        return;
+      }
+
       if (selector === 'download_url_regex') {
         els.newSourceSelectorHelp.innerHTML = 'Version direkt aus der URL per Regex extrahieren. Standardmäßig wird die erste Capture-Gruppe als Version genutzt. Optional kannst du mit Versions-Template Gruppen zusammensetzen, z. B. <code>$1.$2</code>.';
         return;
@@ -1769,6 +1775,7 @@ async function requestSync(packageId, btn) {
         'release_name',
         'brave_chromium_composite',
         'html_regex',
+        'html_deep_regex',
         'download_url_regex',
         'winget_id',
         'winst-manager'
@@ -1810,8 +1817,8 @@ async function requestSync(packageId, btn) {
         payload.source_note = 'XPath: /html/body/div[64]/div/main/div[2]/div[2]/section/div[1]/div/div[2]/header/div/span\nRegex-Gruppe: 1\nDownload: https://www.adobe.com/devnet-docs/acrobatetk/tools/ReleaseNotesDC/index.html#continuous-track';
       }
 
-      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'download_url_regex' || payload.version_selector === 'winst-manager') && !payload.version_pattern) {
-        setMessage(els.sourcesMessage, 'Für html_regex, download_url_regex oder winst-manager bitte ein Versions-Pattern eintragen.', 'error');
+      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'html_deep_regex' || payload.version_selector === 'download_url_regex' || payload.version_selector === 'winst-manager') && !payload.version_pattern) {
+        setMessage(els.sourcesMessage, 'Für html_regex, html_deep_regex, download_url_regex oder winst-manager bitte ein Versions-Pattern eintragen.', 'error');
         return;
       }
 
@@ -1864,8 +1871,8 @@ async function requestSync(packageId, btn) {
         return;
       }
 
-      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'download_url_regex' || payload.version_selector === 'winst-manager') && !payload.version_pattern) {
-        alert('Für html_regex, download_url_regex oder winst-manager bitte ein Versions-Pattern eintragen.');
+      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'html_deep_regex' || payload.version_selector === 'download_url_regex' || payload.version_selector === 'winst-manager') && !payload.version_pattern) {
+        alert('Für html_regex, html_deep_regex, download_url_regex oder winst-manager bitte ein Versions-Pattern eintragen.');
         return;
       }
 
