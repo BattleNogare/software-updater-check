@@ -14,7 +14,7 @@ on:
 
   schedule:
     # Alle 15 Minuten vorhandene queued Jobs abarbeiten
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
 
 permissions:
   contents: read
