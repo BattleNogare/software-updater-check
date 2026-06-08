@@ -812,6 +812,25 @@
         <div id="optionInstallMeta" class="muted" style="font-size:12px;margin-top:8px;"></div>
       </section>
 
+      <section class="card" style="margin-bottom:18px;">
+        <div class="label">Paket-Aktivierung</div>
+        <div style="display:grid;grid-template-columns:220px 1fr auto;gap:10px;align-items:end;margin-top:8px;">
+          <div class="field" style="margin:0;">
+            <label for="optionPackageStatus">Paketstatus</label>
+            <select id="optionPackageStatus" class="select">
+              <option value="active">Aktiv</option>
+              <option value="ignored">Deaktiviert / ignored</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0;">
+            <label for="optionIgnoreReason">Kommentar / Ignore-Grund</label>
+            <input id="optionIgnoreReason" class="input" placeholder="z. B. Veraltet, wird nicht mehr gepflegt" />
+          </div>
+          <button id="savePackageStateBtn" class="btn secondary small">Speichern</button>
+        </div>
+        <div id="optionPackageStateMeta" class="muted" style="font-size:12px;margin-top:8px;"></div>
+      </section>
+
       <section class="card status-details-card">
         <div class="label">Statusdetails</div>
         <div id="optionStatusDetails" class="option-status-details">
@@ -977,6 +996,10 @@
       optionInstallCount: $('optionInstallCount'),
       optionInstallMeta: $('optionInstallMeta'),
       saveOptionInstallBtn: $('saveOptionInstallBtn'),
+      optionPackageStatus: $('optionPackageStatus'),
+      optionIgnoreReason: $('optionIgnoreReason'),
+      savePackageStateBtn: $('savePackageStateBtn'),
+      optionPackageStateMeta: $('optionPackageStateMeta'),
       optionStatusDetails: $('optionStatusDetails')
     };
 
@@ -1073,6 +1096,16 @@
         if (!currentSourcesPackageId) return;
         const count = Number(els.optionInstallCount.value || 0);
         saveInstallationCount(currentSourcesPackageId, count, els.saveOptionInstallBtn);
+      });
+      els.savePackageStateBtn.addEventListener('click', () => {
+        if (!currentSourcesPackageId) return;
+        savePackageState(currentSourcesPackageId, els.savePackageStateBtn);
+      });
+      els.optionPackageStatus.addEventListener('change', () => {
+        const isIgnored = els.optionPackageStatus.value === 'ignored';
+        els.optionIgnoreReason.placeholder = isIgnored
+          ? 'Grund für Deaktivierung eintragen'
+          : 'Optionaler Kommentar';
       });
       els.newSourceType.addEventListener('change', applyNewSourceDefaults);
       els.newSourceVersionSelector.addEventListener('change', updateNewSourceSelectorHelp);
@@ -1430,6 +1463,7 @@ async function requestSync(packageId, btn) {
       await loadAll();
       if (currentSourcesPackageId === packageId && els.sourcesDialog.open) {
         renderOptionsInstallation();
+        renderPackageState();
         renderSourcesDialog();
       }
     }
@@ -1444,6 +1478,7 @@ async function requestSync(packageId, btn) {
       setMessage(els.sourcesMessage, '');
       clearNewSourceForm();
       renderOptionsInstallation();
+      renderPackageState();
       optionChecks = [];
       renderOptionStatusDetails();
       renderSourcesDialog();
@@ -1463,6 +1498,95 @@ async function requestSync(packageId, btn) {
 
       els.optionInstallCount.value = Number(pkg.installation_count || 0);
       els.optionInstallMeta.textContent = `${pkg.installation_count_source || 'manual'} · ${formatDate(pkg.installation_count_updated_at)}`;
+    }
+
+    function renderPackageState() {
+      const pkg = packages.find((p) => p.package_id === currentSourcesPackageId);
+      if (!pkg) return;
+
+      const isIgnored = pkg.ignored === true || pkg.package_status === 'ignored';
+
+      els.optionPackageStatus.value = isIgnored ? 'ignored' : 'active';
+      els.optionIgnoreReason.value = pkg.ignore_reason || '';
+      els.optionIgnoreReason.placeholder = isIgnored
+        ? 'Grund für Deaktivierung eintragen'
+        : 'Optionaler Kommentar';
+
+      const statusText = isIgnored
+        ? 'Dieses Paket ist deaktiviert/ignored und sollte nicht mehr automatisch geprüft werden.'
+        : 'Dieses Paket ist aktiv und kann geprüft werden.';
+
+      els.optionPackageStateMeta.innerHTML = `
+        ${statusPill(isIgnored ? 'skipped' : (pkg.check_status || 'not_checked'), pkg.update_available)}
+        <span style="margin-left:8px;">${escapeHtml(statusText)}</span>
+        ${pkg.ignore_reason ? `<div style="margin-top:6px;">Ignore-Grund: ${escapeHtml(pkg.ignore_reason)}</div>` : ''}
+      `;
+    }
+
+    async function savePackageState(packageId, btn) {
+      if (!canMaintain()) return;
+
+      const targetStatus = els.optionPackageStatus.value;
+      const isIgnored = targetStatus === 'ignored';
+      const reason = els.optionIgnoreReason.value.trim();
+
+      if (isIgnored && !reason) {
+        alert('Bitte einen Kommentar / Ignore-Grund eintragen.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Speichere ...';
+
+      const payload = isIgnored
+        ? {
+            package_status: 'ignored',
+            ignored: true,
+            ignore_reason: reason,
+            check_status: 'skipped',
+            check_message: 'Paket wurde über die Website deaktiviert / auf ignored gesetzt.'
+          }
+        : {
+            package_status: 'active',
+            ignored: false,
+            ignore_reason: null,
+            check_status: 'not_checked',
+            check_message: 'Paket wurde über die Website wieder aktiviert.'
+          };
+
+      const { error } = await sb
+        .from('packages')
+        .update(payload)
+        .eq('package_id', packageId);
+
+      btn.disabled = false;
+      btn.textContent = 'Speichern';
+
+      if (error) {
+        alert(`Fehler beim Speichern des Paketstatus: ${error.message}`);
+        return;
+      }
+
+      if (isIgnored) {
+        await sb
+          .from('check_jobs')
+          .update({
+            status: 'done',
+            finished_at: new Date().toISOString(),
+            message: 'Job übersprungen, Paket ist ignored.'
+          })
+          .eq('package_id', packageId)
+          .in('status', ['queued', 'running']);
+      }
+
+      await loadAll();
+
+      if (currentSourcesPackageId === packageId && els.sourcesDialog.open) {
+        renderOptionsInstallation();
+        renderPackageState();
+        renderOptionStatusDetails();
+        renderSourcesDialog();
+      }
     }
 
     function safeJson(value) {
@@ -1580,6 +1704,14 @@ async function requestSync(packageId, btn) {
           <div class="status-detail-box">
             <div class="caption">Paket-ID</div>
             <div class="content">${escapeHtml(pkg.package_id)}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Paketstatus</div>
+            <div class="content">${escapeHtml(pkg.package_status || '-')} · ignored=${pkg.ignored === true ? 'true' : 'false'}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Ignore-Grund</div>
+            <div class="content">${escapeHtml(pkg.ignore_reason || '-')}</div>
           </div>
           <div class="status-detail-box">
             <div class="caption">Lokale Version</div>
