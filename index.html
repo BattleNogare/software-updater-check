@@ -717,6 +717,7 @@
 </head>
 
 <body>
+  <nav id="alphabetNav" class="alphabet-nav hidden" aria-label="Alphabetische Paketnavigation"></nav>
   <section id="loginView" class="login-shell">
     <div class="login-card">
       <h1>Software Update Manager</h1>
@@ -1236,7 +1237,7 @@
     function showLogin() {
       els.loginView.classList.remove('hidden');
       els.appView.classList.add('hidden');
-      els.alphabetNav.classList.add('hidden');
+      if (els.alphabetNav) els.alphabetNav.classList.add('hidden');
     }
 
     async function enterApp() {
@@ -1425,10 +1426,12 @@
     }
 
     function renderAlphabetNav(rows) {
+      if (!els.alphabetNav) return;
+
       const letters = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
       const available = new Set(rows.map(getPackageAlpha));
 
-      els.alphabetNav.classList.toggle('hidden', els.appView.classList.contains('hidden'));
+      els.alphabetNav.classList.toggle('hidden', els.appView?.classList.contains('hidden') ?? true);
       els.alphabetNav.innerHTML = letters.map((letter) => `
         <button type="button" data-alpha-jump="${letter}" ${available.has(letter) ? '' : 'disabled'} title="Zu ${letter} springen">${letter}</button>
       `).join('');
@@ -1447,6 +1450,7 @@
       const y = row.getBoundingClientRect().top + window.scrollY - 92;
       window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
 
+      if (!els.alphabetNav) return;
       els.alphabetNav.querySelectorAll('button').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.alphaJump === letter);
       });
