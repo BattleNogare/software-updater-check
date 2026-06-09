@@ -281,15 +281,15 @@
 
     .alphabet-nav {
       position: fixed;
-      left: max(8px, calc((100vw - 1500px) / 2 - 44px));
+      left: max(18px, calc((100vw - 1500px) / 2 + 14px));
       top: 50%;
       transform: translateY(-50%);
       z-index: 20;
       display: flex;
       flex-direction: column;
-      gap: 3px;
-      padding: 8px 6px;
-      background: rgba(20, 20, 20, 0.82);
+      gap: 4px;
+      padding: 10px 7px;
+      background: rgba(20, 20, 20, 0.86);
       border: 1px solid var(--border);
       border-radius: 999px;
       box-shadow: var(--shadow);
@@ -297,14 +297,14 @@
     }
 
     .alphabet-nav button {
-      width: 26px;
-      height: 22px;
+      width: 32px;
+      height: 26px;
       border: 0;
       border-radius: 999px;
       background: transparent;
       color: var(--muted);
-      font-size: 12px;
-      font-weight: 800;
+      font-size: 14px;
+      font-weight: 900;
       line-height: 1;
       display: inline-flex;
       align-items: center;
@@ -328,10 +328,12 @@
 
     .table-shell {
       overflow: auto;
+      max-height: calc(100vh - 230px);
       background: rgba(20, 20, 20, 0.78);
       border: 1px solid var(--border);
       border-radius: 18px;
       box-shadow: var(--shadow);
+      scroll-behavior: smooth;
     }
 
     table {
@@ -341,10 +343,22 @@
     }
 
     thead {
-      background: rgba(10, 10, 10, 0.88);
+      background: rgba(10, 10, 10, 0.92);
+    }
+
+    .table-shell thead tr {
       position: sticky;
       top: 0;
-      z-index: 5;
+      z-index: 8;
+    }
+
+    .table-shell thead th {
+      position: sticky;
+      top: 0;
+      z-index: 9;
+      background: rgba(10, 10, 10, 0.96);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 1px 0 rgba(148, 163, 184, 0.22);
     }
 
     th,
