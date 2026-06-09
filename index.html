@@ -1217,39 +1217,72 @@
       }
     }
 
+    async function fetchAllRows(tableName, selectColumns = '*', orderBuilder = null, pageSize = 1000) {
+      const allRows = [];
+      let from = 0;
+
+      while (true) {
+        let query = sb
+          .from(tableName)
+          .select(selectColumns)
+          .range(from, from + pageSize - 1);
+
+        if (orderBuilder) {
+          query = orderBuilder(query);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          throw error;
+        }
+
+        const rows = data || [];
+        allRows.push(...rows);
+
+        if (rows.length < pageSize) {
+          break;
+        }
+
+        from += pageSize;
+      }
+
+      return allRows;
+    }
+
     async function loadPackages() {
       els.packageTbody.innerHTML = `<tr><td colspan="8" class="empty">Lade Pakete ...</td></tr>`;
 
-      const { data, error } = await sb
-        .from('packages')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (error) {
+      try {
+        packages = await fetchAllRows(
+          'packages',
+          '*',
+          (query) => query.order('name', { ascending: true })
+        );
+      } catch (error) {
+        packages = [];
         els.packageTbody.innerHTML = `<tr><td colspan="8" class="empty">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
-        return;
       }
-
-      packages = data || [];
     }
 
     async function loadSources() {
-      const { data, error } = await sb
-        .from('package_sources')
-        .select('*')
-        .order('priority', { ascending: true })
-        .order('reliability_score', { ascending: false });
+      try {
+        const data = await fetchAllRows(
+          'package_sources',
+          '*',
+          (query) => query
+            .order('priority', { ascending: true })
+            .order('reliability_score', { ascending: false })
+        );
 
-      if (error) {
+        sourcesByPackage = {};
+        for (const source of data || []) {
+          if (!sourcesByPackage[source.package_id]) sourcesByPackage[source.package_id] = [];
+          sourcesByPackage[source.package_id].push(source);
+        }
+      } catch (error) {
         console.error(error);
         sourcesByPackage = {};
-        return;
-      }
-
-      sourcesByPackage = {};
-      for (const source of data || []) {
-        if (!sourcesByPackage[source.package_id]) sourcesByPackage[source.package_id] = [];
-        sourcesByPackage[source.package_id].push(source);
       }
     }
 
@@ -1425,28 +1458,18 @@ async function requestSync(packageId, btn) {
     return;
   }
 
-  btn.textContent = 'Prüfe ...';
-
-  const { data: fnData, error: fnError } = await sb.functions.invoke('process-check-jobs', {
-    body: {
-      limit: 5
-    }
-  });
-
-  if (fnError) {
-    alert(`Sync-Job wurde erstellt, aber die Verarbeitung konnte nicht gestartet werden: ${fnError.message}`);
-    btn.disabled = false;
-    btn.textContent = 'Sync';
-    await loadAll();
-    return;
-  }
-
-  console.log('process-check-jobs result:', fnData);
+  // Wichtig:
+  // Der Sync-Button erstellt nur den local_check Job.
+  // Dieser Job muss vom local-runner verarbeitet werden, damit Dev2-Version und Git-Version gelesen werden.
+  // Die Edge Function process-check-jobs verarbeitet nur Online-Jobs und darf local_check nicht übernehmen.
+  btn.textContent = 'Queued';
 
   await loadAll();
 
-  btn.disabled = false;
-  btn.textContent = 'Sync';
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.textContent = 'Sync';
+  }, 800);
 }
 
     async function saveInstallationCount(packageId, count, btn) {
