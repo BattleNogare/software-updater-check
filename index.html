@@ -268,7 +268,7 @@
 
     .toolbar {
       display: grid;
-      grid-template-columns: 1fr auto auto auto;
+      grid-template-columns: 1fr auto auto auto auto;
       gap: 10px;
       margin: 16px 0;
       background: rgba(20, 20, 20, 0.78);
@@ -765,6 +765,7 @@
       </select>
 
       <button id="reloadBtn" class="btn secondary">Neu laden</button>
+      <button id="openInstallImportBtn" class="btn" title="Installationszahlen importieren">+</button>
     </section>
 
     <section class="table-shell">
@@ -928,6 +929,41 @@
     </div>
   </dialog>
 
+  <dialog id="installImportDialog">
+    <div class="dialog-head">
+      <div>
+        <h2>Installationszahlen importieren</h2>
+        <p>Text einfügen. Es werden nur die ersten zwei Spalten verwendet: Paket-ID und Anzahl. Weitere Spalten werden ignoriert.</p>
+      </div>
+      <button id="closeInstallImportBtn" class="btn secondary small">Schließen</button>
+    </div>
+
+    <div class="dialog-body">
+      <section class="card" style="margin-bottom:18px;">
+        <div class="label">Import-Text</div>
+        <textarea id="installImportText" class="textarea" style="min-height:260px;margin-top:8px;" placeholder="activepython&#9;7.029&#9;160&#9;43&#10;activepython3&#9;77&#9;1&#9;77"></textarea>
+        <div class="source-help" style="margin-top:10px;margin-bottom:0;">
+          Beispiel: <code>python 65.229 919 70</code> wird als <code>package_id=python</code> und <code>installation_count=65229</code> importiert.
+        </div>
+      </section>
+
+      <section class="card" style="margin-bottom:18px;">
+        <div class="label">Vorschau</div>
+        <div id="installImportPreview" class="muted" style="margin-top:8px;line-height:1.5;">Noch keine Daten eingefügt.</div>
+      </section>
+
+      <div id="installImportMessage" class="message"></div>
+    </div>
+
+    <div class="dialog-footer">
+      <span class="muted">Nicht vorhandene Pakete werden automatisch ignoriert.</span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="saveInstallImportBtn" class="btn">Speichern</button>
+        <button id="closeInstallImportBtn2" class="btn secondary">Abbrechen</button>
+      </div>
+    </div>
+  </dialog>
+
   <script>
     const SUPABASE_URL = 'https://jgzuuanvrcmgbwtbnmrj.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnenV1YW52cmNtZ2J3dGJubXJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNTYzMDQsImV4cCI6MjA5NTkzMjMwNH0.OxXmh1tYlINRplNHCh3mvvrGBSH3qz7EYmOQUPRL9iQ';
@@ -964,6 +1000,7 @@
       statusFilter: $('statusFilter'),
       packageStatusFilter: $('packageStatusFilter'),
       reloadBtn: $('reloadBtn'),
+      openInstallImportBtn: $('openInstallImportBtn'),
 
       statTotal: $('statTotal'),
       statUpdates: $('statUpdates'),
@@ -1000,7 +1037,14 @@
       optionIgnoreReason: $('optionIgnoreReason'),
       savePackageStateBtn: $('savePackageStateBtn'),
       optionPackageStateMeta: $('optionPackageStateMeta'),
-      optionStatusDetails: $('optionStatusDetails')
+      optionStatusDetails: $('optionStatusDetails'),
+      installImportDialog: $('installImportDialog'),
+      installImportText: $('installImportText'),
+      installImportPreview: $('installImportPreview'),
+      installImportMessage: $('installImportMessage'),
+      closeInstallImportBtn: $('closeInstallImportBtn'),
+      closeInstallImportBtn2: $('closeInstallImportBtn2'),
+      saveInstallImportBtn: $('saveInstallImportBtn')
     };
 
     function canMaintain() {
@@ -1071,6 +1115,11 @@
       els.signupBtn.addEventListener('click', signup);
       els.logoutBtn.addEventListener('click', logout);
       els.reloadBtn.addEventListener('click', loadAll);
+      els.openInstallImportBtn.addEventListener('click', openInstallImportDialog);
+      els.closeInstallImportBtn.addEventListener('click', closeInstallImportDialog);
+      els.closeInstallImportBtn2.addEventListener('click', closeInstallImportDialog);
+      els.installImportText.addEventListener('input', renderInstallImportPreview);
+      els.saveInstallImportBtn.addEventListener('click', saveInstallImport);
 
       els.searchInput.addEventListener('input', renderPackages);
       els.statusFilter.addEventListener('change', renderPackages);
@@ -1471,6 +1520,180 @@ async function requestSync(packageId, btn) {
     btn.textContent = 'Sync';
   }, 800);
 }
+
+
+    function openInstallImportDialog() {
+      if (!canMaintain()) return;
+      els.installImportText.value = '';
+      setMessage(els.installImportMessage, '');
+      renderInstallImportPreview();
+      els.installImportDialog.showModal();
+      setTimeout(() => els.installImportText.focus(), 100);
+    }
+
+    function closeInstallImportDialog() {
+      els.installImportDialog.close();
+    }
+
+    function parseInstallCountValue(value) {
+      const raw = String(value || '').trim();
+      if (!raw) return null;
+
+      // Die Importdateien nutzen den Punkt als Tausendertrennzeichen: 65.229 => 65229.
+      const normalized = raw
+        .replace(/\./g, '')
+        .replace(/\s/g, '')
+        .replace(/,.*/, '');
+
+      if (!/^\d+$/.test(normalized)) return null;
+      return Number(normalized);
+    }
+
+    function parseInstallImportText() {
+      const text = els.installImportText.value || '';
+      const lines = text.split(/\r?\n/);
+      const parsed = [];
+      const invalid = [];
+      const duplicateMap = new Map();
+
+      lines.forEach((line, index) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        const parts = trimmed.split(/\s+/);
+        const packageId = parts[0]?.trim();
+        const count = parseInstallCountValue(parts[1]);
+
+        if (!packageId || count === null || !Number.isSafeInteger(count) || count < 0) {
+          invalid.push({ line: index + 1, text: line });
+          return;
+        }
+
+        // Falls ein Paket mehrfach vorkommt, gewinnt der letzte Wert aus der Einfügeliste.
+        duplicateMap.set(packageId, {
+          package_id: packageId,
+          installation_count: count,
+          source_line: index + 1
+        });
+      });
+
+      parsed.push(...duplicateMap.values());
+      return { parsed, invalid, inputLineCount: lines.filter((line) => line.trim()).length };
+    }
+
+    function renderInstallImportPreview() {
+      const { parsed, invalid, inputLineCount } = parseInstallImportText();
+      const examples = parsed.slice(0, 6)
+        .map((row) => `${escapeHtml(row.package_id)} = ${Number(row.installation_count).toLocaleString('de-DE')}`)
+        .join('<br>');
+
+      els.installImportPreview.innerHTML = `
+        Eingefügte Datenzeilen: <strong>${inputLineCount}</strong><br>
+        Gültige eindeutige Paket-IDs: <strong>${parsed.length}</strong><br>
+        Ungültige Zeilen: <strong>${invalid.length}</strong>
+        ${examples ? `<hr style="border:0;border-top:1px solid var(--border);margin:10px 0;">${examples}` : ''}
+      `;
+    }
+
+    async function fetchExistingPackageIds(packageIds) {
+      const existing = new Set();
+      const chunkSize = 500;
+
+      for (let i = 0; i < packageIds.length; i += chunkSize) {
+        const chunk = packageIds.slice(i, i + chunkSize);
+        const { data, error } = await sb
+          .from('packages')
+          .select('package_id')
+          .in('package_id', chunk);
+
+        if (error) throw error;
+        for (const row of data || []) existing.add(row.package_id);
+      }
+
+      return existing;
+    }
+
+    async function saveInstallImport() {
+      if (!canMaintain()) return;
+
+      const { parsed, invalid } = parseInstallImportText();
+      if (!parsed.length) {
+        setMessage(els.installImportMessage, 'Keine gültigen Importzeilen gefunden.', 'error');
+        return;
+      }
+
+      const confirmText = `${parsed.length} eindeutige Paketwerte importieren?\n\nNicht vorhandene Paket-IDs werden ignoriert.`;
+      if (!confirm(confirmText)) return;
+
+      els.saveInstallImportBtn.disabled = true;
+      els.saveInstallImportBtn.textContent = 'Speichere ...';
+      setMessage(els.installImportMessage, 'Prüfe vorhandene Pakete ...');
+
+      try {
+        const existing = await fetchExistingPackageIds(parsed.map((row) => row.package_id));
+        const rowsToUpdate = parsed.filter((row) => existing.has(row.package_id));
+        const ignoredRows = parsed.filter((row) => !existing.has(row.package_id));
+
+        let updated = 0;
+        let failed = 0;
+        const failedRows = [];
+        const concurrency = 10;
+        let cursor = 0;
+
+        async function worker() {
+          while (cursor < rowsToUpdate.length) {
+            const row = rowsToUpdate[cursor++];
+            const { error } = await sb
+              .from('packages')
+              .update({
+                installation_count: row.installation_count,
+                installation_count_updated_at: new Date().toISOString(),
+                installation_count_source: 'manual',
+                updated_at: new Date().toISOString()
+              })
+              .eq('package_id', row.package_id);
+
+            if (error) {
+              failed += 1;
+              failedRows.push(`${row.package_id}: ${error.message}`);
+            } else {
+              updated += 1;
+            }
+
+            if ((updated + failed) % 25 === 0 || updated + failed === rowsToUpdate.length) {
+              setMessage(
+                els.installImportMessage,
+                `Speichere ... ${updated + failed}/${rowsToUpdate.length} verarbeitet.`
+              );
+            }
+          }
+        }
+
+        await Promise.all(Array.from({ length: Math.min(concurrency, rowsToUpdate.length) }, () => worker()));
+
+        await loadAll();
+
+        const ignoredPreview = ignoredRows.slice(0, 20).map((row) => row.package_id).join(', ');
+        const failedPreview = failedRows.slice(0, 10).join('\n');
+
+        setMessage(
+          els.installImportMessage,
+          [
+            `Import abgeschlossen.`,
+            `Aktualisiert: ${updated}`,
+            `Ignoriert, weil nicht vorhanden: ${ignoredRows.length}${ignoredPreview ? ` (${ignoredPreview}${ignoredRows.length > 20 ? ', ...' : ''})` : ''}`,
+            `Ungültige Zeilen: ${invalid.length}`,
+            failed ? `Fehler: ${failed}\n${failedPreview}` : ''
+          ].filter(Boolean).join('\n'),
+          failed ? 'error' : 'ok'
+        );
+      } catch (error) {
+        setMessage(els.installImportMessage, `Fehler beim Import: ${error.message}`, 'error');
+      } finally {
+        els.saveInstallImportBtn.disabled = false;
+        els.saveInstallImportBtn.textContent = 'Speichern';
+      }
+    }
 
     async function saveInstallationCount(packageId, count, btn) {
       if (!canMaintain()) return;
