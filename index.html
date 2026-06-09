@@ -277,6 +277,55 @@
       padding: 12px;
     }
 
+
+
+    .alphabet-nav {
+      position: fixed;
+      left: max(8px, calc((100vw - 1500px) / 2 - 44px));
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 8px 6px;
+      background: rgba(20, 20, 20, 0.82);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .alphabet-nav button {
+      width: 26px;
+      height: 22px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .alphabet-nav button:hover,
+    .alphabet-nav button.active {
+      background: rgba(229, 229, 229, 0.14);
+      color: var(--text);
+    }
+
+    .alphabet-nav button:disabled {
+      opacity: 0.23;
+      cursor: default;
+    }
+
+    tr.alpha-anchor td {
+      border-top: 2px solid rgba(229, 229, 229, 0.22);
+    }
+
     .table-shell {
       overflow: auto;
       background: rgba(20, 20, 20, 0.78);
@@ -644,6 +693,10 @@
         grid-template-columns: 1fr;
       }
 
+      .alphabet-nav {
+        display: none;
+      }
+
       .cards {
         grid-template-columns: repeat(2, minmax(120px, 1fr));
       }
@@ -986,6 +1039,7 @@
     const els = {
       loginView: $('loginView'),
       appView: $('appView'),
+      alphabetNav: $('alphabetNav'),
       loginEmail: $('loginEmail'),
       loginPassword: $('loginPassword'),
       loginBtn: $('loginBtn'),
@@ -1182,6 +1236,7 @@
     function showLogin() {
       els.loginView.classList.remove('hidden');
       els.appView.classList.add('hidden');
+      els.alphabetNav.classList.add('hidden');
     }
 
     async function enterApp() {
@@ -1356,6 +1411,69 @@
       els.statChecksToday.textContent = data.checks_today ?? 0;
     }
 
+    function getPackageAlpha(pkg) {
+      const value = String(pkg?.name || pkg?.package_id || '').trim();
+      if (!value) return '#';
+
+      const first = value.charAt(0).toUpperCase();
+      const normalized = first
+        .replace('Ä', 'A')
+        .replace('Ö', 'O')
+        .replace('Ü', 'U');
+
+      return /^[A-Z]$/.test(normalized) ? normalized : '#';
+    }
+
+    function renderAlphabetNav(rows) {
+      const letters = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
+      const available = new Set(rows.map(getPackageAlpha));
+
+      els.alphabetNav.classList.toggle('hidden', els.appView.classList.contains('hidden'));
+      els.alphabetNav.innerHTML = letters.map((letter) => `
+        <button type="button" data-alpha-jump="${letter}" ${available.has(letter) ? '' : 'disabled'} title="Zu ${letter} springen">${letter}</button>
+      `).join('');
+
+      els.alphabetNav.querySelectorAll('[data-alpha-jump]').forEach((btn) => {
+        btn.addEventListener('click', () => jumpToAlpha(btn.dataset.alphaJump));
+      });
+    }
+
+    function jumpToAlpha(letter) {
+      const row = Array.from(els.packageTbody.querySelectorAll('tr[data-alpha]'))
+        .find((tr) => tr.dataset.alpha === letter);
+
+      if (!row) return;
+
+      const y = row.getBoundingClientRect().top + window.scrollY - 92;
+      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+
+      els.alphabetNav.querySelectorAll('button').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.alphaJump === letter);
+      });
+    }
+
+    function renderPackagesPreserveScroll() {
+      const y = window.scrollY;
+      const tableScrollLeft = document.querySelector('.table-shell')?.scrollLeft || 0;
+      renderPackages();
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: y, behavior: 'auto' });
+        const shell = document.querySelector('.table-shell');
+        if (shell) shell.scrollLeft = tableScrollLeft;
+      });
+    }
+
+    function patchPackageLocal(packageId, patch) {
+      const index = packages.findIndex((pkg) => pkg.package_id === packageId);
+      if (index === -1) return;
+      packages[index] = { ...packages[index], ...patch };
+    }
+
+    function patchPackagesLocal(rows) {
+      const byId = new Map(rows.map((row) => [row.package_id, row]));
+      packages = packages.map((pkg) => byId.has(pkg.package_id) ? { ...pkg, ...byId.get(pkg.package_id) } : pkg);
+    }
+
     function getFilteredPackages() {
       const q = els.searchInput.value.trim().toLowerCase();
       const status = els.statusFilter.value;
@@ -1422,11 +1540,18 @@
       const rows = getFilteredPackages();
 
       if (!rows.length) {
+        renderAlphabetNav(rows);
         els.packageTbody.innerHTML = `<tr><td colspan="8" class="empty">Keine Pakete gefunden.</td></tr>`;
         return;
       }
 
+      renderAlphabetNav(rows);
+
+      const seenAlpha = new Set();
       els.packageTbody.innerHTML = rows.map((p) => {
+        const alpha = getPackageAlpha(p);
+        const isFirstAlpha = !seenAlpha.has(alpha);
+        seenAlpha.add(alpha);
         const installCell = `
           <strong>${Number(p.installation_count || 0)}</strong>
           <div class="muted" style="font-size:12px;margin-top:4px;">${escapeHtml(p.installation_count_source || 'manual')}</div>
@@ -1448,7 +1573,7 @@
           `;
 
         return `
-          <tr>
+          <tr data-alpha="${alpha}" class="${isFirstAlpha ? 'alpha-anchor' : ''}">
             <td>
               <div class="pkg-name">${escapeHtml(p.name || '-')}</div>
               <div class="pkg-id">${escapeHtml(p.package_id)}</div>
@@ -1513,12 +1638,17 @@ async function requestSync(packageId, btn) {
   // Die Edge Function process-check-jobs verarbeitet nur Online-Jobs und darf local_check nicht übernehmen.
   btn.textContent = 'Queued';
 
-  await loadAll();
-
-  setTimeout(() => {
-    btn.disabled = false;
-    btn.textContent = 'Sync';
-  }, 800);
+  const now = new Date().toISOString();
+  patchPackageLocal(packageId, {
+    check_status: 'queued',
+    check_message: 'local_check wurde über die Website in die Queue gelegt.',
+    local_sync_status: 'queued',
+    local_sync_message: 'local_check wurde über die Website in die Queue gelegt.',
+    local_sync_requested_at: now,
+    updated_at: now
+  });
+  renderPackagesPreserveScroll();
+  if (canAdmin()) loadAdminStats();
 }
 
 
@@ -1671,7 +1801,15 @@ async function requestSync(packageId, btn) {
 
         await Promise.all(Array.from({ length: Math.min(concurrency, rowsToUpdate.length) }, () => worker()));
 
-        await loadAll();
+        patchPackagesLocal(rowsToUpdate.map((row) => ({
+          package_id: row.package_id,
+          installation_count: row.installation_count,
+          installation_count_source: 'manual',
+          installation_count_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })));
+        renderPackagesPreserveScroll();
+        if (canAdmin()) loadAdminStats();
 
         const ignoredPreview = ignoredRows.slice(0, 20).map((row) => row.package_id).join(', ');
         const failedPreview = failedRows.slice(0, 10).join('\n');
@@ -1719,12 +1857,21 @@ async function requestSync(packageId, btn) {
         return;
       }
 
-      await loadAll();
+      const now = new Date().toISOString();
+      patchPackageLocal(packageId, {
+        installation_count: count,
+        installation_count_source: 'manual',
+        installation_count_updated_at: now,
+        updated_at: now
+      });
+      renderPackagesPreserveScroll();
+
       if (currentSourcesPackageId === packageId && els.sourcesDialog.open) {
         renderOptionsInstallation();
         renderPackageState();
-        renderSourcesDialog();
+        renderOptionStatusDetails();
       }
+      if (canAdmin()) loadAdminStats();
     }
 
     function openSourcesDialog(packageId) {
@@ -1838,14 +1985,18 @@ async function requestSync(packageId, btn) {
           .in('status', ['queued', 'running']);
       }
 
-      await loadAll();
+      patchPackageLocal(packageId, {
+        ...payload,
+        updated_at: new Date().toISOString()
+      });
+      renderPackagesPreserveScroll();
 
       if (currentSourcesPackageId === packageId && els.sourcesDialog.open) {
         renderOptionsInstallation();
         renderPackageState();
         renderOptionStatusDetails();
-        renderSourcesDialog();
       }
+      if (canAdmin()) loadAdminStats();
     }
 
     function safeJson(value) {
@@ -2229,7 +2380,7 @@ async function requestSync(packageId, btn) {
       clearNewSourceForm();
       await loadSources();
       renderSourcesDialog();
-      renderPackages();
+      renderPackagesPreserveScroll();
     }
 
     async function saveSource(sourceId, btn) {
@@ -2286,7 +2437,7 @@ async function requestSync(packageId, btn) {
 
       await loadSources();
       renderSourcesDialog();
-      renderPackages();
+      renderPackagesPreserveScroll();
     }
 
     async function deleteSource(sourceId, btn) {
@@ -2309,7 +2460,7 @@ async function requestSync(packageId, btn) {
 
       await loadSources();
       renderSourcesDialog();
-      renderPackages();
+      renderPackagesPreserveScroll();
     }
 
     init();
