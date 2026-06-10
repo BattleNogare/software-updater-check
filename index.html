@@ -281,7 +281,7 @@
 
     .alphabet-nav {
       position: fixed;
-      left: max(18px, calc((100vw - 1500px) / 2 + 14px));
+      left: clamp(8px, calc((100vw - 1500px) / 4 - 20px), 120px);
       top: 50%;
       transform: translateY(-50%);
       z-index: 20;
@@ -327,8 +327,8 @@
     }
 
     .table-shell {
-      overflow: auto;
-      max-height: calc(100vh - 230px);
+      overflow: visible;
+      max-height: none;
       background: rgba(20, 20, 20, 0.78);
       border: 1px solid var(--border);
       border-radius: 18px;
@@ -346,19 +346,13 @@
       background: rgba(10, 10, 10, 0.92);
     }
 
-    .table-shell thead tr {
-      position: sticky;
-      top: 0;
-      z-index: 8;
-    }
-
     .table-shell thead th {
       position: sticky;
       top: 0;
-      z-index: 9;
-      background: rgba(10, 10, 10, 0.96);
+      z-index: 30;
+      background: rgba(10, 10, 10, 0.98);
       backdrop-filter: blur(14px);
-      box-shadow: 0 1px 0 rgba(148, 163, 184, 0.22);
+      box-shadow: 0 1px 0 rgba(148, 163, 184, 0.22), 0 10px 24px rgba(0, 0, 0, 0.22);
     }
 
     th,
@@ -689,6 +683,13 @@
     @media (max-width: 1200px) {
       .cards {
         grid-template-columns: repeat(4, minmax(140px, 1fr));
+      }
+    }
+
+
+    @media (max-width: 1640px) {
+      .alphabet-nav {
+        display: none;
       }
     }
 
