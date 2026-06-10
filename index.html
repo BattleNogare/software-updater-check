@@ -844,6 +844,7 @@
             <th class="sortable" data-sort="name">Paket</th>
             <th class="sortable" data-sort="local_dev2_version">Dev2-Version</th>
             <th class="sortable" data-sort="git_version">Git-Version</th>
+            <th class="sortable" data-sort="git_last_package_update">Letztes Update</th>
             <th class="sortable" data-sort="check_status">Status</th>
             <th class="sortable" data-sort="online_version">Online-Version</th>
             <th class="sortable" data-sort="installation_count">Anzahl Installationen</th>
@@ -853,7 +854,7 @@
         </thead>
         <tbody id="packageTbody">
           <tr>
-            <td colspan="8" class="empty">Lade Daten ...</td>
+            <td colspan="9" class="empty">Lade Daten ...</td>
           </tr>
         </tbody>
       </table>
@@ -1377,7 +1378,7 @@
     }
 
     async function loadPackages() {
-      els.packageTbody.innerHTML = `<tr><td colspan="8" class="empty">Lade Pakete ...</td></tr>`;
+      els.packageTbody.innerHTML = `<tr><td colspan="9" class="empty">Lade Pakete ...</td></tr>`;
 
       try {
         packages = await fetchAllRows(
@@ -1387,7 +1388,7 @@
         );
       } catch (error) {
         packages = [];
-        els.packageTbody.innerHTML = `<tr><td colspan="8" class="empty">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
+        els.packageTbody.innerHTML = `<tr><td colspan="9" class="empty">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
       }
     }
 
@@ -1528,6 +1529,7 @@
             p.local_version,
             p.local_dev2_version,
             p.git_version,
+            p.git_last_package_update,
             p.online_version,
             p.check_status,
             p.check_message,
@@ -1547,7 +1549,7 @@
 
         let result = 0;
 
-        if (sortKey.includes('date') || sortKey.endsWith('_at') || sortKey === 'last_checked' || sortKey === 'last_seen_at') {
+        if (sortKey.includes('date') || sortKey.endsWith('_at') || sortKey === 'last_checked' || sortKey === 'last_seen_at' || sortKey === 'git_last_package_update') {
           result = new Date(av || 0).getTime() - new Date(bv || 0).getTime();
         } else if (typeof av === 'number' || typeof bv === 'number') {
           result = Number(av || 0) - Number(bv || 0);
@@ -1566,7 +1568,7 @@
 
       if (!rows.length) {
         renderAlphabetNav(rows);
-        els.packageTbody.innerHTML = `<tr><td colspan="8" class="empty">Keine Pakete gefunden.</td></tr>`;
+        els.packageTbody.innerHTML = `<tr><td colspan="9" class="empty">Keine Pakete gefunden.</td></tr>`;
         return;
       }
 
@@ -1605,6 +1607,7 @@
             </td>
             <td>${escapeHtml(p.local_dev2_version || p.local_version || '-')}</td>
             <td>${escapeHtml(p.git_version || '-')}</td>
+            <td>${formatDate(p.git_last_package_update)}</td>
             <td>${statusPill(p.check_status, p.update_available)}</td>
             <td>
               <strong>${escapeHtml(p.manual_override ? p.manual_online_version : (p.online_version || '-'))}</strong>
@@ -2151,6 +2154,10 @@ async function requestSync(packageId, btn) {
           <div class="status-detail-box">
             <div class="caption">Git-Version</div>
             <div class="content">${escapeHtml(pkg.git_version || '-')}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Letztes Git-Update</div>
+            <div class="content">${formatDate(pkg.git_last_package_update)}</div>
           </div>
           <div class="status-detail-box">
             <div class="caption">Online-Version</div>
