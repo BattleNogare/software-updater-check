@@ -933,7 +933,7 @@
         <input id="newSourceUrl" class="input" placeholder="https://..." />
       </div>
 
-      <div style="display:grid;grid-template-columns:220px 1fr 220px;gap:10px;">
+      <div style="display:grid;grid-template-columns:220px 1fr 220px 220px;gap:10px;">
         <div class="field">
           <label>Versions-Selector</label>
           <select id="newSourceVersionSelector" class="select">
@@ -955,7 +955,12 @@
 
         <div class="field">
           <label>Versions-Template</label>
-          <input id="newSourceVersionTemplate" class="input" placeholder="z. B. $1.$2" />
+          <input id="newSourceVersionTemplate" class="input" placeholder="z. B. $1.$2 oder bei Winget 1:$1" />
+        </div>
+
+        <div class="field">
+          <label>Version-Transform-Regex</label>
+          <input id="newSourceVersionTransformPattern" class="input" placeholder="Nur Winget, z. B. ^(.+)$" />
         </div>
       </div>
 
@@ -1092,6 +1097,7 @@
       newSourceVersionSelector: $('newSourceVersionSelector'),
       newSourceVersionPattern: $('newSourceVersionPattern'),
       newSourceVersionTemplate: $('newSourceVersionTemplate'),
+      newSourceVersionTransformPattern: $('newSourceVersionTransformPattern'),
       newSourceSelectorHelp: $('newSourceSelectorHelp'),
       newSourceNote: $('newSourceNote'),
       newSourcePriority: $('newSourcePriority'),
@@ -1514,7 +1520,7 @@
       if (q) {
         rows = rows.filter((p) => {
           const src = sourcesByPackage[p.package_id] || [];
-          const sourceText = src.map((s) => `${s.source_type} ${s.source_url} ${s.version_selector || ''} ${s.version_pattern || ''} ${s.version_template || ''} ${s.source_note || ''}`).join(' ');
+          const sourceText = src.map((s) => `${s.source_type} ${s.source_url} ${s.version_selector || ''} ${s.version_pattern || ''} ${s.version_template || ''} ${s.version_transform_pattern || ''} ${s.source_note || ''}`).join(' ');
 
           const haystack = [
             p.name,
@@ -2204,7 +2210,7 @@ async function requestSync(packageId, btn) {
       }
 
       if (selector === 'winget_id') {
-        els.newSourceSelectorHelp.innerHTML = 'Für Winget muss im Pattern der Winget-Identifier stehen, z. B. <code>Adobe.Acrobat.Reader.64-bit</code>.';
+        els.newSourceSelectorHelp.innerHTML = 'Für Winget muss im Pattern der Winget-Identifier stehen, z. B. <code>Adobe.Acrobat.Reader.64-bit</code>. Optional: Mit <strong>Version-Transform-Regex</strong> und <strong>Versions-Template</strong> kann die gefundene Winget-Version umgebaut werden, z. B. Transform-Regex <code>^(.+)$</code> und Template <code>1:$1</code> macht aus <code>5.4.920.0</code> den Wert <code>1:5.4.920.0</code>.';
         return;
       }
 
@@ -2217,6 +2223,7 @@ async function requestSync(packageId, btn) {
       els.newSourceVersionSelector.value = 'html_regex';
       els.newSourceVersionPattern.value = '';
       els.newSourceVersionTemplate.value = '';
+      if (els.newSourceVersionTransformPattern) els.newSourceVersionTransformPattern.value = '';
       els.newSourceNote.value = '';
       els.newSourcePriority.value = '1';
       els.newSourceReliability.value = '50';
@@ -2266,7 +2273,12 @@ async function requestSync(packageId, btn) {
 
           <div class="source-cell">
             <div class="source-field-caption">Template</div>
-            <input class="input" value="${escapeHtml(s.version_template || '')}" data-source-field="version_template" data-source-id="${s.id}" placeholder="$1.$2">
+            <input class="input" value="${escapeHtml(s.version_template || '')}" data-source-field="version_template" data-source-id="${s.id}" placeholder="$1.$2 / Winget: 1:$1">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Transform-Regex</div>
+            <input class="input" value="${escapeHtml(s.version_transform_pattern || '')}" data-source-field="version_transform_pattern" data-source-id="${s.id}" placeholder="Winget: ^(.+)$">
           </div>
 
           <div class="source-cell">
@@ -2354,6 +2366,7 @@ async function requestSync(packageId, btn) {
         version_selector: els.newSourceVersionSelector.value || null,
         version_pattern: els.newSourceVersionPattern.value.trim() || null,
         version_template: els.newSourceVersionTemplate.value.trim() || null,
+        version_transform_pattern: els.newSourceVersionTransformPattern?.value.trim() || null,
         source_note: els.newSourceNote.value.trim() || null,
         priority: Number(els.newSourcePriority.value || 1),
         reliability_score: Number(els.newSourceReliability.value || 50),
@@ -2417,6 +2430,7 @@ async function requestSync(packageId, btn) {
         version_selector: read('version_selector') || null,
         version_pattern: read('version_pattern')?.trim() || null,
         version_template: read('version_template')?.trim() || null,
+        version_transform_pattern: read('version_transform_pattern')?.trim() || null,
         reliability_score: Number(read('reliability_score') || 50),
         check_interval_hours: Number(read('check_interval_hours') || 24),
         enabled: read('enabled') === 'true',
