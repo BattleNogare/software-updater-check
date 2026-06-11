@@ -961,7 +961,7 @@
 
         <div class="field">
           <label>Version-Transform-Regex</label>
-          <input id="newSourceVersionTransformPattern" class="input" placeholder="Nur Winget, z. B. ^(.+)$" />
+          <input id="newSourceVersionTransformPattern" class="input" placeholder="z. B. ^(.+)$" />
         </div>
       </div>
 
@@ -2217,11 +2217,11 @@ async function requestSync(packageId, btn) {
       }
 
       if (selector === 'winget_id') {
-        els.newSourceSelectorHelp.innerHTML = 'Für Winget muss im Pattern der Winget-Identifier stehen, z. B. <code>Adobe.Acrobat.Reader.64-bit</code>. Optional: Mit <strong>Version-Transform-Regex</strong> und <strong>Versions-Template</strong> kann die gefundene Winget-Version umgebaut werden, z. B. Transform-Regex <code>^(.+)$</code> und Template <code>1:$1</code> macht aus <code>5.4.920.0</code> den Wert <code>1:5.4.920.0</code>.';
+        els.newSourceSelectorHelp.innerHTML = 'Für Winget muss im Pattern der Winget-Identifier stehen, z. B. <code>Adobe.Acrobat.Reader.64-bit</code>. Optional: Mit <strong>Version-Transform-Regex</strong> und <strong>Versions-Template</strong> kann die gefundene Winget-Version danach umgebaut werden, z. B. Transform-Regex <code>^(.+)$</code> und Template <code>1:$1</code> macht aus <code>5.4.920.0</code> den Wert <code>1:5.4.920.0</code>.';
         return;
       }
 
-      els.newSourceSelectorHelp.textContent = 'Für GitHub-Releases reicht meistens tag. Für Sonderfälle kann ein spezieller Selector genutzt werden.';
+      els.newSourceSelectorHelp.innerHTML = 'Für GitHub-Releases reicht meistens <code>tag</code>. Optional: Mit <strong>Version-Transform-Regex</strong> und <strong>Versions-Template</strong> kann die gefundene GitHub-Version danach umgebaut werden, z. B. Transform-Regex <code>^v?(.+)$</code> und Template <code>$1</code> entfernt ein führendes <code>v</code>, oder Template <code>1:$1</code> ergänzt einen Präfix.';
     }
 
     function clearNewSourceForm() {
@@ -2280,12 +2280,12 @@ async function requestSync(packageId, btn) {
 
           <div class="source-cell">
             <div class="source-field-caption">Template</div>
-            <input class="input" value="${escapeHtml(s.version_template || '')}" data-source-field="version_template" data-source-id="${s.id}" placeholder="$1.$2 / Winget: 1:$1">
+            <input class="input" value="${escapeHtml(s.version_template || '')}" data-source-field="version_template" data-source-id="${s.id}" placeholder="$1.$2 / 1:$1">
           </div>
 
           <div class="source-cell">
             <div class="source-field-caption">Transform-Regex</div>
-            <input class="input" value="${escapeHtml(s.version_transform_pattern || '')}" data-source-field="version_transform_pattern" data-source-id="${s.id}" placeholder="Winget: ^(.+)$">
+            <input class="input" value="${escapeHtml(s.version_transform_pattern || '')}" data-source-field="version_transform_pattern" data-source-id="${s.id}" placeholder="^(.+)$">
           </div>
 
           <div class="source-cell">
