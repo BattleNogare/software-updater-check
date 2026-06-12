@@ -1,1 +1,162 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seite in Bearbeitung</title>
 
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #ffffff;
+      background:
+        radial-gradient(circle at top left, rgba(80, 120, 255, 0.25), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(255, 120, 80, 0.18), transparent 35%),
+        linear-gradient(135deg, #0b0f19, #111827 45%, #05070d);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: absolute;
+      width: 420px;
+      height: 420px;
+      background: linear-gradient(135deg, #3b82f6, #9333ea, #f97316);
+      filter: blur(120px);
+      opacity: 0.35;
+      animation: glowMove 8s ease-in-out infinite alternate;
+    }
+
+    @keyframes glowMove {
+      from {
+        transform: translate(-120px, -80px) scale(1);
+      }
+      to {
+        transform: translate(120px, 80px) scale(1.2);
+      }
+    }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      width: min(90%, 620px);
+      padding: 55px 35px;
+      text-align: center;
+      border-radius: 28px;
+      background: rgba(17, 24, 39, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow:
+        0 25px 80px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(18px);
+    }
+
+    .icon {
+      width: 86px;
+      height: 86px;
+      margin: 0 auto 28px;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #2563eb, #7c3aed, #f97316);
+      box-shadow: 0 0 35px rgba(124, 58, 237, 0.45);
+      font-size: 42px;
+      animation: pulse 2.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 35px rgba(124, 58, 237, 0.45);
+      }
+      50% {
+        transform: scale(1.06);
+        box-shadow: 0 0 55px rgba(249, 115, 22, 0.45);
+      }
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.8rem);
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(90deg, #ffffff, #93c5fd, #fbbf24);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 16px;
+    }
+
+    p {
+      color: #cbd5e1;
+      font-size: 1.1rem;
+      line-height: 1.6;
+      max-width: 460px;
+      margin: 0 auto 30px;
+    }
+
+    .loader {
+      width: 170px;
+      height: 8px;
+      margin: 0 auto;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      overflow: hidden;
+    }
+
+    .loader span {
+      display: block;
+      width: 45%;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6, #f97316);
+      animation: loading 1.8s ease-in-out infinite;
+    }
+
+    @keyframes loading {
+      0% {
+        transform: translateX(-100%);
+      }
+      100% {
+        transform: translateX(260%);
+      }
+    }
+
+    .footer-text {
+      margin-top: 28px;
+      font-size: 0.9rem;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="card">
+    <div class="icon">🛠️</div>
+
+    <h1>Seite in Bearbeitung</h1>
+
+    <p>
+      Diese Seite wird aktuell überarbeitet und steht bald wieder vollständig zur Verfügung.
+    </p>
+
+    <div class="loader">
+      <span></span>
+    </div>
+
+    <div class="footer-text">
+      Bitte später erneut vorbeischauen
+    </div>
+  </main>
+
+</body>
+</html>
