@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Software Update Manager</title>
+  <link rel="icon" href="favicon.ico" sizes="any" />
+  <link rel="shortcut icon" href="favicon.ico" />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -200,6 +202,20 @@
       margin-bottom: 22px;
     }
 
+    .brand-title {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-logo {
+      width: clamp(42px, 5vw, 64px);
+      height: clamp(42px, 5vw, 64px);
+      object-fit: contain;
+      flex: 0 0 auto;
+      filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.35));
+    }
+
     .brand h1 {
       margin: 0;
       font-size: clamp(25px, 3vw, 40px);
@@ -209,6 +225,14 @@
     .brand p {
       margin: 8px 0 0;
       color: var(--muted);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .user-box {
@@ -270,11 +294,25 @@
       display: grid;
       grid-template-columns: 1fr auto auto auto auto;
       gap: 10px;
-      margin: 16px 0;
+      margin: 16px 0 8px;
       background: rgba(20, 20, 20, 0.78);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 12px;
+    }
+
+    .selection-count {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 0 0 10px 4px;
+    }
+
+    .status-reason {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      margin-top: 5px;
+      max-width: 220px;
     }
 
 
@@ -699,6 +737,15 @@
         flex-direction: column;
       }
 
+      .top-actions {
+        justify-content: stretch;
+      }
+
+      .top-actions > .btn,
+      .top-actions > .user-box {
+        width: 100%;
+      }
+
       .user-box {
         justify-content: space-between;
         border-radius: 16px;
@@ -760,16 +807,22 @@
   <main id="appView" class="page hidden">
     <div class="topbar">
       <div class="brand">
-        <h1>Software Update Manager</h1>
+        <div class="brand-title">
+          <img src="logo.png" alt="" class="brand-logo" />
+          <h1>Software Update Manager</h1>
+        </div>
         <p>Übersicht deiner Pakete, Dev2-/Git-Versionen, Online-Versionen, Quellen und Installationszahlen.</p>
       </div>
 
-      <div class="user-box">
-        <div class="user-meta">
-          <div id="userEmail" class="user-email">-</div>
-          <div id="userRole" class="user-role">-</div>
+      <div class="top-actions">
+        <button id="packageChecksBtn" class="btn secondary small" type="button">Paket-Checks</button>
+        <div class="user-box">
+          <div class="user-meta">
+            <div id="userEmail" class="user-email">-</div>
+            <div id="userRole" class="user-role">-</div>
+          </div>
+          <button id="logoutBtn" class="btn secondary small">Logout</button>
         </div>
-        <button id="logoutBtn" class="btn secondary small">Logout</button>
       </div>
     </div>
 
@@ -836,6 +889,7 @@
       <button id="reloadBtn" class="btn secondary">Neu laden</button>
       <button id="openInstallImportBtn" class="btn" title="Installationszahlen importieren">+</button>
     </section>
+    <div id="selectionCount" class="selection-count">0 Pakete in der aktuellen Auswahl</div>
 
     <section class="table-shell">
       <table>
@@ -1055,6 +1109,9 @@
     let sortKey = 'name';
     let sortDir = 'asc';
     let currentSourcesPackageId = null;
+    let appLoaded = false;
+    let lastLoadedUserId = null;
+    let loadAllPromise = null;
 
     const $ = (id) => document.getElementById(id);
 
@@ -1068,6 +1125,7 @@
       signupBtn: $('signupBtn'),
       loginMessage: $('loginMessage'),
       logoutBtn: $('logoutBtn'),
+      packageChecksBtn: $('packageChecksBtn'),
       userEmail: $('userEmail'),
       userRole: $('userRole'),
       adminCards: $('adminCards'),
@@ -1077,6 +1135,7 @@
       packageStatusFilter: $('packageStatusFilter'),
       reloadBtn: $('reloadBtn'),
       openInstallImportBtn: $('openInstallImportBtn'),
+      selectionCount: $('selectionCount'),
 
       statTotal: $('statTotal'),
       statUpdates: $('statUpdates'),
@@ -1162,16 +1221,27 @@
     function statusPill(status, updateAvailable) {
       const s = status || 'not_checked';
 
+      if (s === 'queued') return `<span class="pill blue">Queued</span>`;
+      if (s === 'checking') return `<span class="pill blue">Checking</span>`;
+      if (s === 'skipped') return `<span class="pill gray">Skipped</span>`;
       if (s === 'update_available' || updateAvailable) return `<span class="pill orange">Update</span>`;
       if (s === 'up_to_date') return `<span class="pill green">Aktuell</span>`;
       if (s === 'failed') return `<span class="pill red">Fehler</span>`;
       if (s === 'uncertain') return `<span class="pill yellow">Unsicher</span>`;
-      if (s === 'queued') return `<span class="pill blue">Queued</span>`;
-      if (s === 'checking') return `<span class="pill blue">Checking</span>`;
       if (s === 'stale') return `<span class="pill yellow">Stale</span>`;
-      if (s === 'skipped') return `<span class="pill gray">Skipped</span>`;
 
       return `<span class="pill gray">Nicht geprüft</span>`;
+    }
+
+    function skippedReason(pkg) {
+      if ((pkg?.check_status !== 'skipped') && pkg?.package_status !== 'ignored' && pkg?.ignored !== true) return '';
+      const reason = pkg?.ignore_reason || pkg?.check_message || '';
+      return reason ? `<div class="status-reason">${escapeHtml(reason)}</div>` : '';
+    }
+
+    function isSyncPending(pkg) {
+      const pendingStatuses = new Set(['queued', 'running', 'checking']);
+      return pendingStatuses.has(String(pkg?.check_status || '')) || pendingStatuses.has(String(pkg?.local_sync_status || ''));
     }
 
     function jumpPill(type, score) {
@@ -1191,7 +1261,8 @@
       els.loginBtn.addEventListener('click', login);
       els.signupBtn.addEventListener('click', signup);
       els.logoutBtn.addEventListener('click', logout);
-      els.reloadBtn.addEventListener('click', loadAll);
+      els.packageChecksBtn.addEventListener('click', () => window.open('local-checks.html', '_blank', 'noopener'));
+      els.reloadBtn.addEventListener('click', () => loadAll({ force: true, preserveScroll: true }));
       els.openInstallImportBtn.addEventListener('click', openInstallImportDialog);
       els.closeInstallImportBtn.addEventListener('click', closeInstallImportDialog);
       els.closeInstallImportBtn2.addEventListener('click', closeInstallImportDialog);
@@ -1244,13 +1315,18 @@
         showLogin();
       }
 
-      sb.auth.onAuthStateChange(async (_event, session) => {
+      sb.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
+          const sameUserAlreadyLoaded = appLoaded && lastLoadedUserId === session.user.id && !els.appView.classList.contains('hidden');
           currentUser = session.user;
-          await enterApp();
-        } else {
+          if (!sameUserAlreadyLoaded && event !== 'TOKEN_REFRESHED') {
+            await enterApp();
+          }
+        } else if (event === 'SIGNED_OUT') {
           currentUser = null;
           currentRole = 'viewer';
+          appLoaded = false;
+          lastLoadedUserId = null;
           showLogin();
         }
       });
@@ -1268,8 +1344,17 @@
 
       els.userEmail.textContent = currentUser?.email || '-';
 
+      const sameUserAlreadyLoaded = appLoaded && lastLoadedUserId === currentUser?.id && packages.length > 0;
+      if (sameUserAlreadyLoaded) {
+        renderPackagesPreserveScroll();
+        if (canAdmin()) loadAdminStats();
+        return;
+      }
+
       await loadRole();
-      await loadAll();
+      await loadAll({ force: true });
+      appLoaded = true;
+      lastLoadedUserId = currentUser?.id || null;
     }
 
     async function login() {
@@ -1334,13 +1419,29 @@
       els.adminCards.classList.toggle('hidden', !canAdmin());
     }
 
-    async function loadAll() {
-      await loadPackages();
-      await loadSources();
-      renderPackages();
+    async function loadAll(options = {}) {
+      const { force = false, preserveScroll = false } = options;
+      if (loadAllPromise && !force) return loadAllPromise;
 
-      if (canAdmin()) {
-        await loadAdminStats();
+      loadAllPromise = (async () => {
+        const y = window.scrollY;
+        await loadPackages();
+        await loadSources();
+        if (preserveScroll) {
+          renderPackagesPreserveScroll(y);
+        } else {
+          renderPackages();
+        }
+
+        if (canAdmin()) {
+          await loadAdminStats();
+        }
+      })();
+
+      try {
+        await loadAllPromise;
+      } finally {
+        loadAllPromise = null;
       }
     }
 
@@ -1478,15 +1579,21 @@
       });
     }
 
-    function renderPackagesPreserveScroll() {
-      const y = window.scrollY;
-      const tableScrollLeft = document.querySelector('.table-shell')?.scrollLeft || 0;
+    function renderPackagesPreserveScroll(forcedY = null) {
+      const y = Number.isFinite(forcedY) ? forcedY : window.scrollY;
+      const shellBefore = document.querySelector('.table-shell');
+      const tableScrollLeft = shellBefore?.scrollLeft || 0;
       renderPackages();
-      requestAnimationFrame(() => {
+
+      const restore = () => {
         window.scrollTo({ top: y, behavior: 'auto' });
         const shell = document.querySelector('.table-shell');
         if (shell) shell.scrollLeft = tableScrollLeft;
-      });
+      };
+
+      requestAnimationFrame(restore);
+      setTimeout(restore, 30);
+      setTimeout(restore, 120);
     }
 
     function patchPackageLocal(packageId, patch) {
@@ -1509,7 +1616,9 @@
 
       if (status) {
         rows = rows.filter((p) => {
-          if (status === 'update_available') return p.update_available === true || p.check_status === 'update_available';
+          if (status === 'update_available') return (p.update_available === true || p.check_status === 'update_available') && !isSyncPending(p);
+          if (status === 'queued') return p.check_status === 'queued' || p.local_sync_status === 'queued';
+          if (status === 'checking') return p.check_status === 'checking' || p.local_sync_status === 'running' || p.local_sync_status === 'checking';
           return p.check_status === status;
         });
       }
@@ -1566,6 +1675,11 @@
     function renderPackages() {
       const rows = getFilteredPackages();
 
+      if (els.selectionCount) {
+        const total = packages.length;
+        els.selectionCount.textContent = `${rows.length.toLocaleString('de-DE')} von ${total.toLocaleString('de-DE')} Paketen in der aktuellen Auswahl`;
+      }
+
       if (!rows.length) {
         renderAlphabetNav(rows);
         els.packageTbody.innerHTML = `<tr><td colspan="9" class="empty">Keine Pakete gefunden.</td></tr>`;
@@ -1584,10 +1698,14 @@
           <div class="muted" style="font-size:12px;margin-top:4px;">${escapeHtml(p.installation_count_source || 'manual')}</div>
         `;
 
+        const syncPending = isSyncPending(p);
+        const syncButtonText = syncPending ? (p.check_status === 'checking' || p.local_sync_status === 'running' ? 'Läuft ...' : 'Queued') : 'Sync';
+        const syncButton = `<button class="btn small" data-sync="${escapeHtml(p.package_id)}" ${syncPending ? 'disabled' : ''}>${syncButtonText}</button>`;
+
         const actions = canMaintain()
           ? `
             <div class="row-actions">
-              <button class="btn small" data-sync="${escapeHtml(p.package_id)}">Sync</button>
+              ${syncButton}
               <button class="btn secondary small" data-ticket="${escapeHtml(p.package_id)}">Ticket erstellen</button>
               <button class="btn secondary small" data-sources="${escapeHtml(p.package_id)}">Optionen</button>
             </div>
@@ -1608,7 +1726,7 @@
             <td>${escapeHtml(p.local_dev2_version || p.local_version || '-')}</td>
             <td>${escapeHtml(p.git_version || '-')}</td>
             <td>${formatDate(p.git_last_package_update)}</td>
-            <td>${statusPill(p.check_status, p.update_available)}</td>
+            <td>${statusPill(p.check_status, p.update_available)}${skippedReason(p)}</td>
             <td>
               <strong>${escapeHtml(p.manual_override ? p.manual_online_version : (p.online_version || '-'))}</strong>
               ${p.manual_override ? '<div class="muted" style="font-size:12px;">manuell überschrieben</div>' : ''}
