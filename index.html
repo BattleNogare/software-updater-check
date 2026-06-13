@@ -1224,11 +1224,11 @@
       if (s === 'queued') return `<span class="pill blue">Queued</span>`;
       if (s === 'checking') return `<span class="pill blue">Checking</span>`;
       if (s === 'skipped') return `<span class="pill gray">Skipped</span>`;
-      if (s === 'update_available' || updateAvailable) return `<span class="pill orange">Update</span>`;
-      if (s === 'up_to_date') return `<span class="pill green">Aktuell</span>`;
       if (s === 'failed') return `<span class="pill red">Fehler</span>`;
       if (s === 'uncertain') return `<span class="pill yellow">Unsicher</span>`;
       if (s === 'stale') return `<span class="pill yellow">Stale</span>`;
+      if (s === 'up_to_date') return `<span class="pill green">Aktuell</span>`;
+      if (s === 'update_available' || updateAvailable) return `<span class="pill orange">Update</span>`;
 
       return `<span class="pill gray">Nicht geprüft</span>`;
     }
@@ -1616,7 +1616,12 @@
 
       if (status) {
         rows = rows.filter((p) => {
-          if (status === 'update_available') return (p.update_available === true || p.check_status === 'update_available') && !isSyncPending(p);
+          if (status === 'update_available') {
+            const hardStatus = ['failed', 'skipped', 'queued', 'checking', 'uncertain', 'stale'];
+            return (p.update_available === true || p.check_status === 'update_available')
+              && !hardStatus.includes(String(p.check_status || ''))
+              && !isSyncPending(p);
+          }
           if (status === 'queued') return p.check_status === 'queued' || p.local_sync_status === 'queued';
           if (status === 'checking') return p.check_status === 'checking' || p.local_sync_status === 'running' || p.local_sync_status === 'checking';
           return p.check_status === status;
