@@ -959,7 +959,7 @@
 
       <section class="card" style="margin-bottom:18px;">
         <div class="label">Hand-Check</div>
-        <div style="display:grid;grid-template-columns:170px 170px 1fr;gap:10px;align-items:end;margin-top:8px;">
+        <div style="display:grid;grid-template-columns:170px 170px 220px 1fr;gap:10px;align-items:end;margin-top:8px;">
           <label class="checkbox-line" style="align-self:center;margin-top:20px;">
             <input id="optionHandCheckEnabled" type="checkbox" />
             <span>Hand-Check aktiv</span>
@@ -967,6 +967,10 @@
           <div class="field" style="margin:0;">
             <label for="optionHandCheckIntervalDays">Intervall in Tagen</label>
             <input id="optionHandCheckIntervalDays" class="input" type="number" min="1" step="1" placeholder="30" />
+          </div>
+          <div class="field" style="margin:0;">
+            <label for="optionHandCheckTargetVersion">Version</label>
+            <input id="optionHandCheckTargetVersion" class="input" placeholder="optional, z. B. 1:5.4.920.0" />
           </div>
           <div class="field" style="margin:0;">
             <label for="optionHandCheckNote">Anleitung / Notiz</label>
@@ -1198,6 +1202,7 @@
       savePackageStateBtn: $('savePackageStateBtn'),
       optionHandCheckEnabled: $('optionHandCheckEnabled'),
       optionHandCheckIntervalDays: $('optionHandCheckIntervalDays'),
+      optionHandCheckTargetVersion: $('optionHandCheckTargetVersion'),
       optionHandCheckNote: $('optionHandCheckNote'),
       optionHandCheckMeta: $('optionHandCheckMeta'),
       saveHandCheckBtn: $('saveHandCheckBtn'),
@@ -1248,27 +1253,61 @@
       });
     }
 
+    function getEffectiveStatus(pkg) {
+      const raw = pkg?.check_status || 'not_checked';
+      const isIgnored = pkg?.ignored === true || pkg?.package_status === 'ignored';
+
+      if (isIgnored) return 'skipped';
+      if (raw === 'failed') return 'failed';
+      if (raw === 'queued') return 'queued';
+      if (raw === 'checking') return 'checking';
+      if (raw === 'update_available' || pkg?.update_available === true) return 'update_available';
+      if (raw === 'hand_check') return 'hand_check';
+
+      // Hand-Check soll auch während der Wartezeit als Status angezeigt werden,
+      // solange kein Update/Fehler/laufender Job vorliegt.
+      if (pkg?.hand_check_enabled === true) return 'hand_check';
+
+      return raw;
+    }
+
     function statusPill(status, updateAvailable) {
       const s = status || 'not_checked';
 
       if (s === 'queued') return `<span class="pill blue">Queued</span>`;
       if (s === 'checking') return `<span class="pill blue">Checking</span>`;
+      if (s === 'failed') return `<span class="pill red">Fehler</span>`;
+      if (s === 'update_available' || updateAvailable) return `<span class="pill orange">Update</span>`;
       if (s === 'hand_check') return `<span class="pill yellow">Hand-Check</span>`;
       if (s === 'skipped') return `<span class="pill gray">Skipped</span>`;
-      if (s === 'update_available' || updateAvailable) return `<span class="pill orange">Update</span>`;
       if (s === 'up_to_date') return `<span class="pill green">Aktuell</span>`;
-      if (s === 'failed') return `<span class="pill red">Fehler</span>`;
       if (s === 'uncertain') return `<span class="pill yellow">Unsicher</span>`;
       if (s === 'stale') return `<span class="pill yellow">Stale</span>`;
 
       return `<span class="pill gray">Nicht geprüft</span>`;
     }
 
-    function skippedReason(pkg) {
-      if (pkg?.check_status === 'hand_check') {
-        const reason = pkg?.hand_check_note || pkg?.check_message || 'Hand-Check ist fällig.';
+    function statusCell(pkg) {
+      const effectiveStatus = getEffectiveStatus(pkg);
+      const effectiveUpdate = effectiveStatus === 'update_available';
+      return statusPill(effectiveStatus, effectiveUpdate) + skippedReason(pkg, effectiveStatus);
+    }
+
+    function skippedReason(pkg, effectiveStatus = getEffectiveStatus(pkg)) {
+      if (effectiveStatus === 'hand_check') {
+        let reason = '';
+        if (pkg?.hand_check_target_version) {
+          reason = `Warte auf lokale Version >= ${pkg.hand_check_target_version}`;
+        } else if (pkg?.check_status === 'hand_check') {
+          reason = pkg?.hand_check_note || pkg?.check_message || 'Hand-Check ist fällig.';
+        } else if (pkg?.hand_check_next_due_at) {
+          reason = `Nächster Hand-Check: ${formatDate(pkg.hand_check_next_due_at)}`;
+        } else {
+          reason = pkg?.hand_check_note || 'Hand-Check aktiv.';
+        }
         return reason ? `<div class="status-reason">${escapeHtml(reason)}</div>` : '';
       }
+
       if ((pkg?.check_status !== 'skipped') && pkg?.package_status !== 'ignored' && pkg?.ignored !== true) return '';
       const reason = pkg?.ignore_reason || pkg?.check_message || '';
       return reason ? `<div class="status-reason">${escapeHtml(reason)}</div>` : '';
@@ -1651,10 +1690,11 @@
 
       if (status) {
         rows = rows.filter((p) => {
-          if (status === 'update_available') return (p.update_available === true || p.check_status === 'update_available') && !isSyncPending(p);
-          if (status === 'queued') return p.check_status === 'queued' || p.local_sync_status === 'queued';
-          if (status === 'checking') return p.check_status === 'checking' || p.local_sync_status === 'running' || p.local_sync_status === 'checking';
-          return p.check_status === status;
+          const effectiveStatus = getEffectiveStatus(p);
+          if (status === 'update_available') return effectiveStatus === 'update_available' && !isSyncPending(p);
+          if (status === 'queued') return effectiveStatus === 'queued' || p.local_sync_status === 'queued';
+          if (status === 'checking') return effectiveStatus === 'checking' || p.local_sync_status === 'running' || p.local_sync_status === 'checking';
+          return effectiveStatus === status;
         });
       }
 
@@ -1761,7 +1801,7 @@
             <td>${escapeHtml(p.local_dev2_version || p.local_version || '-')}</td>
             <td>${escapeHtml(p.git_version || '-')}</td>
             <td>${formatDate(p.git_last_package_update)}</td>
-            <td>${statusPill(p.check_status, p.update_available)}${skippedReason(p)}</td>
+            <td>${statusCell(p)}</td>
             <td>
               <strong>${escapeHtml(p.manual_override ? p.manual_online_version : (p.online_version || '-'))}</strong>
               ${p.manual_override ? '<div class="muted" style="font-size:12px;">manuell überschrieben</div>' : ''}
@@ -2106,7 +2146,7 @@ async function requestSync(packageId, btn) {
         : 'Dieses Paket ist aktiv und kann geprüft werden.';
 
       els.optionPackageStateMeta.innerHTML = `
-        ${statusPill(isIgnored ? 'skipped' : (pkg.check_status || 'not_checked'), pkg.update_available)}
+        ${statusPill(isIgnored ? 'skipped' : getEffectiveStatus(pkg), getEffectiveStatus(pkg) === 'update_available')}
         <span style="margin-left:8px;">${escapeHtml(statusText)}</span>
         ${pkg.ignore_reason ? `<div style="margin-top:6px;">Ignore-Grund: ${escapeHtml(pkg.ignore_reason)}</div>` : ''}
       `;
@@ -2118,27 +2158,56 @@ async function requestSync(packageId, btn) {
 
       if (els.optionHandCheckEnabled) els.optionHandCheckEnabled.checked = pkg.hand_check_enabled === true;
       if (els.optionHandCheckIntervalDays) els.optionHandCheckIntervalDays.value = pkg.hand_check_interval_days || 30;
+      if (els.optionHandCheckTargetVersion) els.optionHandCheckTargetVersion.value = pkg.hand_check_target_version || '';
       if (els.optionHandCheckNote) els.optionHandCheckNote.value = pkg.hand_check_note || '';
 
       const enabled = pkg.hand_check_enabled === true;
-      const isDue = pkg.check_status === 'hand_check';
       const nextDue = formatDate(pkg.hand_check_next_due_at);
       const lastDone = formatDate(pkg.hand_check_last_done_at);
+      const localVersion = getLocalCompareVersion(pkg) || '-';
 
       if (els.confirmHandCheckBtn) {
-        els.confirmHandCheckBtn.classList.toggle('hidden', !enabled || !isDue);
+        els.confirmHandCheckBtn.classList.toggle('hidden', !enabled);
       }
 
       if (els.optionHandCheckMeta) {
-        els.optionHandCheckMeta.innerHTML = enabled
-          ? `Aktiv · nächster Check: ${escapeHtml(nextDue || '-')} · zuletzt erledigt: ${escapeHtml(lastDone || '-')}`
-          : 'Hand-Check ist für dieses Paket deaktiviert.';
+        if (!enabled) {
+          els.optionHandCheckMeta.innerHTML = 'Hand-Check ist für dieses Paket deaktiviert.';
+        } else if (pkg.hand_check_target_version) {
+          els.optionHandCheckMeta.innerHTML = `Aktiv · Zielversion: ${escapeHtml(pkg.hand_check_target_version)} · lokale Version: ${escapeHtml(localVersion)} · tägliche Prüfung aktiv`;
+        } else {
+          els.optionHandCheckMeta.innerHTML = `Aktiv · nächster Check: ${escapeHtml(nextDue || '-')} · zuletzt erledigt: ${escapeHtml(lastDone || '-')} · lokale Version: ${escapeHtml(localVersion)}`;
+        }
       }
     }
 
     function computeNextHandCheckDate(intervalDays) {
       const days = Math.max(1, Number(intervalDays || 30));
       return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    }
+
+    function extractVersionNumbersClient(version) {
+      const matches = String(version || '').match(/\d+/g);
+      return matches ? matches.map((part) => Number(part)) : [];
+    }
+
+    function compareVersionsClient(leftVersion, rightVersion) {
+      const left = extractVersionNumbersClient(leftVersion);
+      const right = extractVersionNumbersClient(rightVersion);
+      if (!left.length || !right.length) return null;
+
+      const max = Math.max(left.length, right.length);
+      for (let i = 0; i < max; i++) {
+        const l = left[i] || 0;
+        const r = right[i] || 0;
+        if (l > r) return 1;
+        if (l < r) return -1;
+      }
+      return 0;
+    }
+
+    function getLocalCompareVersion(pkg) {
+      return pkg?.local_dev2_version || pkg?.local_version || pkg?.git_version || null;
     }
 
     async function saveHandCheckOptions(packageId, btn) {
@@ -2170,6 +2239,8 @@ async function requestSync(packageId, btn) {
             hand_check_note: note,
             hand_check_interval_days: intervalDays,
             hand_check_next_due_at: null,
+            hand_check_target_version: null,
+            hand_check_target_set_at: null,
             updated_at: new Date().toISOString()
           };
 
@@ -2202,13 +2273,53 @@ async function requestSync(packageId, btn) {
       const intervalDays = Math.max(1, Number(pkg.hand_check_interval_days || 30));
       const nowIso = new Date().toISOString();
       const nextIso = computeNextHandCheckDate(intervalDays);
-      const payload = {
-        hand_check_last_done_at: nowIso,
-        hand_check_next_due_at: nextIso,
-        check_status: 'not_checked',
-        check_message: 'Hand-Check wurde bestätigt. Nächster Hand-Check ist geplant.',
-        updated_at: nowIso
-      };
+      const targetVersion = els.optionHandCheckTargetVersion?.value.trim() || '';
+      const localVersion = getLocalCompareVersion(pkg);
+
+      let payload;
+
+      if (targetVersion) {
+        const cmp = compareVersionsClient(localVersion, targetVersion);
+
+        if (cmp === null) {
+          alert('Die Zielversion konnte nicht mit der lokalen Version verglichen werden. Prüfe lokale Version und Eingabe.');
+          return;
+        }
+
+        if (cmp >= 0) {
+          payload = {
+            hand_check_last_done_at: nowIso,
+            hand_check_next_due_at: nextIso,
+            hand_check_target_version: null,
+            hand_check_target_set_at: null,
+            update_available: false,
+            check_status: 'skipped',
+            check_message: `Hand-Check bestätigt: lokale Version ${localVersion} erreicht/übertrifft Zielversion ${targetVersion}. Nächster Hand-Check ist geplant.`,
+            updated_at: nowIso
+          };
+        } else {
+          payload = {
+            hand_check_last_done_at: nowIso,
+            hand_check_target_version: targetVersion,
+            hand_check_target_set_at: nowIso,
+            update_available: true,
+            check_status: 'update_available',
+            check_message: `Hand-Check Zielversion ${targetVersion} ist höher als lokale Version ${localVersion}. Paket bleibt auf Update, bis die lokale Version erreicht ist.`,
+            updated_at: nowIso
+          };
+        }
+      } else {
+        payload = {
+          hand_check_last_done_at: nowIso,
+          hand_check_next_due_at: nextIso,
+          hand_check_target_version: null,
+          hand_check_target_set_at: null,
+          update_available: false,
+          check_status: 'not_checked',
+          check_message: 'Hand-Check wurde bestätigt. Nächster Hand-Check ist geplant.',
+          updated_at: nowIso
+        };
+      }
 
       btn.disabled = true;
       btn.textContent = 'Bestätige ...';
@@ -2329,7 +2440,7 @@ async function requestSync(packageId, btn) {
         .select('*')
         .eq('package_id', packageId)
         .order('checked_at', { ascending: false })
-        .limit(5);
+        .limit(2);
 
       if (error) {
         optionChecks = [];
