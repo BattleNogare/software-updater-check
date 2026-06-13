@@ -871,6 +871,7 @@
         <option value="failed">Fehler</option>
         <option value="uncertain">Unsicher</option>
         <option value="stale">Stale</option>
+        <option value="hand_check">Hand-Check</option>
         <option value="queued">Queued</option>
         <option value="checking">Checking</option>
         <option value="not_checked">Noch nicht geprüft</option>
@@ -954,6 +955,29 @@
           <button id="savePackageStateBtn" class="btn secondary small">Speichern</button>
         </div>
         <div id="optionPackageStateMeta" class="muted" style="font-size:12px;margin-top:8px;"></div>
+      </section>
+
+      <section class="card" style="margin-bottom:18px;">
+        <div class="label">Hand-Check</div>
+        <div style="display:grid;grid-template-columns:170px 170px 1fr;gap:10px;align-items:end;margin-top:8px;">
+          <label class="checkbox-line" style="align-self:center;margin-top:20px;">
+            <input id="optionHandCheckEnabled" type="checkbox" />
+            <span>Hand-Check aktiv</span>
+          </label>
+          <div class="field" style="margin:0;">
+            <label for="optionHandCheckIntervalDays">Intervall in Tagen</label>
+            <input id="optionHandCheckIntervalDays" class="input" type="number" min="1" step="1" placeholder="30" />
+          </div>
+          <div class="field" style="margin:0;">
+            <label for="optionHandCheckNote">Anleitung / Notiz</label>
+            <textarea id="optionHandCheckNote" class="textarea" rows="3" placeholder="Beschreibe hier, was beim Hand-Check geprüft werden muss."></textarea>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+          <button id="saveHandCheckBtn" class="btn secondary small">Hand-Check speichern</button>
+          <button id="confirmHandCheckBtn" class="btn small hidden">Hand-Check erledigt</button>
+          <div id="optionHandCheckMeta" class="muted" style="font-size:12px;"></div>
+        </div>
       </section>
 
       <section class="card status-details-card">
@@ -1172,6 +1196,12 @@
       optionPackageStatus: $('optionPackageStatus'),
       optionIgnoreReason: $('optionIgnoreReason'),
       savePackageStateBtn: $('savePackageStateBtn'),
+      optionHandCheckEnabled: $('optionHandCheckEnabled'),
+      optionHandCheckIntervalDays: $('optionHandCheckIntervalDays'),
+      optionHandCheckNote: $('optionHandCheckNote'),
+      optionHandCheckMeta: $('optionHandCheckMeta'),
+      saveHandCheckBtn: $('saveHandCheckBtn'),
+      confirmHandCheckBtn: $('confirmHandCheckBtn'),
       optionPackageStateMeta: $('optionPackageStateMeta'),
       optionStatusDetails: $('optionStatusDetails'),
       installImportDialog: $('installImportDialog'),
@@ -1223,17 +1253,22 @@
 
       if (s === 'queued') return `<span class="pill blue">Queued</span>`;
       if (s === 'checking') return `<span class="pill blue">Checking</span>`;
+      if (s === 'hand_check') return `<span class="pill yellow">Hand-Check</span>`;
       if (s === 'skipped') return `<span class="pill gray">Skipped</span>`;
+      if (s === 'update_available' || updateAvailable) return `<span class="pill orange">Update</span>`;
+      if (s === 'up_to_date') return `<span class="pill green">Aktuell</span>`;
       if (s === 'failed') return `<span class="pill red">Fehler</span>`;
       if (s === 'uncertain') return `<span class="pill yellow">Unsicher</span>`;
       if (s === 'stale') return `<span class="pill yellow">Stale</span>`;
-      if (s === 'up_to_date') return `<span class="pill green">Aktuell</span>`;
-      if (s === 'update_available' || updateAvailable) return `<span class="pill orange">Update</span>`;
 
       return `<span class="pill gray">Nicht geprüft</span>`;
     }
 
     function skippedReason(pkg) {
+      if (pkg?.check_status === 'hand_check') {
+        const reason = pkg?.hand_check_note || pkg?.check_message || 'Hand-Check ist fällig.';
+        return reason ? `<div class="status-reason">${escapeHtml(reason)}</div>` : '';
+      }
       if ((pkg?.check_status !== 'skipped') && pkg?.package_status !== 'ignored' && pkg?.ignored !== true) return '';
       const reason = pkg?.ignore_reason || pkg?.check_message || '';
       return reason ? `<div class="status-reason">${escapeHtml(reason)}</div>` : '';
@@ -1616,12 +1651,7 @@
 
       if (status) {
         rows = rows.filter((p) => {
-          if (status === 'update_available') {
-            const hardStatus = ['failed', 'skipped', 'queued', 'checking', 'uncertain', 'stale'];
-            return (p.update_available === true || p.check_status === 'update_available')
-              && !hardStatus.includes(String(p.check_status || ''))
-              && !isSyncPending(p);
-          }
+          if (status === 'update_available') return (p.update_available === true || p.check_status === 'update_available') && !isSyncPending(p);
           if (status === 'queued') return p.check_status === 'queued' || p.local_sync_status === 'queued';
           if (status === 'checking') return p.check_status === 'checking' || p.local_sync_status === 'running' || p.local_sync_status === 'checking';
           return p.check_status === status;
@@ -2020,6 +2050,7 @@ async function requestSync(packageId, btn) {
       if (currentSourcesPackageId === packageId && els.sourcesDialog.open) {
         renderOptionsInstallation();
         renderPackageState();
+        renderHandCheckOptions();
         renderOptionStatusDetails();
       }
       if (canAdmin()) loadAdminStats();
@@ -2036,6 +2067,7 @@ async function requestSync(packageId, btn) {
       clearNewSourceForm();
       renderOptionsInstallation();
       renderPackageState();
+      renderHandCheckOptions();
       optionChecks = [];
       renderOptionStatusDetails();
       renderSourcesDialog();
@@ -2078,6 +2110,127 @@ async function requestSync(packageId, btn) {
         <span style="margin-left:8px;">${escapeHtml(statusText)}</span>
         ${pkg.ignore_reason ? `<div style="margin-top:6px;">Ignore-Grund: ${escapeHtml(pkg.ignore_reason)}</div>` : ''}
       `;
+    }
+
+    function renderHandCheckOptions() {
+      const pkg = packages.find((p) => p.package_id === currentSourcesPackageId);
+      if (!pkg) return;
+
+      if (els.optionHandCheckEnabled) els.optionHandCheckEnabled.checked = pkg.hand_check_enabled === true;
+      if (els.optionHandCheckIntervalDays) els.optionHandCheckIntervalDays.value = pkg.hand_check_interval_days || 30;
+      if (els.optionHandCheckNote) els.optionHandCheckNote.value = pkg.hand_check_note || '';
+
+      const enabled = pkg.hand_check_enabled === true;
+      const isDue = pkg.check_status === 'hand_check';
+      const nextDue = formatDate(pkg.hand_check_next_due_at);
+      const lastDone = formatDate(pkg.hand_check_last_done_at);
+
+      if (els.confirmHandCheckBtn) {
+        els.confirmHandCheckBtn.classList.toggle('hidden', !enabled || !isDue);
+      }
+
+      if (els.optionHandCheckMeta) {
+        els.optionHandCheckMeta.innerHTML = enabled
+          ? `Aktiv · nächster Check: ${escapeHtml(nextDue || '-')} · zuletzt erledigt: ${escapeHtml(lastDone || '-')}`
+          : 'Hand-Check ist für dieses Paket deaktiviert.';
+      }
+    }
+
+    function computeNextHandCheckDate(intervalDays) {
+      const days = Math.max(1, Number(intervalDays || 30));
+      return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    }
+
+    async function saveHandCheckOptions(packageId, btn) {
+      if (!canMaintain() || !packageId) return;
+
+      const enabled = els.optionHandCheckEnabled?.checked === true;
+      const intervalDays = Math.max(1, Number.parseInt(els.optionHandCheckIntervalDays?.value || '30', 10));
+      const note = els.optionHandCheckNote?.value.trim() || null;
+      const pkg = packages.find((p) => p.package_id === packageId);
+
+      if (enabled && !note) {
+        alert('Bitte eine Anleitung / Notiz für den Hand-Check eintragen.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Speichere ...';
+
+      const payload = enabled
+        ? {
+            hand_check_enabled: true,
+            hand_check_note: note,
+            hand_check_interval_days: intervalDays,
+            hand_check_next_due_at: pkg?.hand_check_next_due_at || computeNextHandCheckDate(intervalDays),
+            updated_at: new Date().toISOString()
+          }
+        : {
+            hand_check_enabled: false,
+            hand_check_note: note,
+            hand_check_interval_days: intervalDays,
+            hand_check_next_due_at: null,
+            updated_at: new Date().toISOString()
+          };
+
+      const { error } = await sb
+        .from('packages')
+        .update(payload)
+        .eq('package_id', packageId);
+
+      btn.disabled = false;
+      btn.textContent = 'Hand-Check speichern';
+
+      if (error) {
+        alert(`Fehler beim Speichern des Hand-Checks: ${error.message}`);
+        return;
+      }
+
+      patchPackageLocal(packageId, payload);
+      renderPackagesPreserveScroll();
+      renderHandCheckOptions();
+      renderOptionStatusDetails();
+      if (canAdmin()) loadAdminStats();
+    }
+
+    async function confirmHandCheckDone(packageId, btn) {
+      if (!canMaintain() || !packageId) return;
+
+      const pkg = packages.find((p) => p.package_id === packageId);
+      if (!pkg) return;
+
+      const intervalDays = Math.max(1, Number(pkg.hand_check_interval_days || 30));
+      const nowIso = new Date().toISOString();
+      const nextIso = computeNextHandCheckDate(intervalDays);
+      const payload = {
+        hand_check_last_done_at: nowIso,
+        hand_check_next_due_at: nextIso,
+        check_status: 'not_checked',
+        check_message: 'Hand-Check wurde bestätigt. Nächster Hand-Check ist geplant.',
+        updated_at: nowIso
+      };
+
+      btn.disabled = true;
+      btn.textContent = 'Bestätige ...';
+
+      const { error } = await sb
+        .from('packages')
+        .update(payload)
+        .eq('package_id', packageId);
+
+      btn.disabled = false;
+      btn.textContent = 'Hand-Check erledigt';
+
+      if (error) {
+        alert(`Fehler beim Bestätigen des Hand-Checks: ${error.message}`);
+        return;
+      }
+
+      patchPackageLocal(packageId, payload);
+      renderPackagesPreserveScroll();
+      renderHandCheckOptions();
+      renderOptionStatusDetails();
+      if (canAdmin()) loadAdminStats();
     }
 
     async function savePackageState(packageId, btn) {
