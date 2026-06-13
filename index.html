@@ -2425,6 +2425,7 @@ async function requestSync(packageId, btn) {
             hand_check_last_done_at: nowIso,
             hand_check_target_version: targetVersion,
             hand_check_target_set_at: nowIso,
+            online_version: targetVersion,
             update_available: true,
             check_status: 'update_available',
             check_message: `Hand-Check Zielversion ${targetVersion} ist höher als lokale Version ${localVersion}. Paket bleibt auf Update, bis die lokale Version erreicht ist.`,
