@@ -852,6 +852,10 @@
         <div id="statStale" class="value">-</div>
       </div>
       <div class="card">
+        <div class="label">Hand-Check</div>
+        <div id="statHandCheck" class="value">-</div>
+      </div>
+      <div class="card">
         <div class="label">Jobs queued</div>
         <div id="statQueued" class="value">-</div>
       </div>
@@ -1171,6 +1175,7 @@
       statUncertain: $('statUncertain'),
       statMissing: $('statMissing'),
       statStale: $('statStale'),
+      statHandCheck: $('statHandCheck'),
       statQueued: $('statQueued'),
       statChecksToday: $('statChecksToday'),
 
@@ -1605,6 +1610,7 @@
       els.statUncertain.textContent = data.packages_uncertain ?? 0;
       els.statMissing.textContent = data.packages_missing ?? 0;
       els.statStale.textContent = data.packages_stale ?? 0;
+      if (els.statHandCheck) els.statHandCheck.textContent = data.packages_hand_check ?? 0;
       els.statQueued.textContent = data.jobs_queued ?? 0;
       els.statChecksToday.textContent = data.checks_today ?? 0;
     }
