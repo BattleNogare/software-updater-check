@@ -265,37 +265,29 @@
 
     .cards {
       display: grid;
-      grid-template-columns: repeat(9, minmax(0, 1fr));
-      gap: 8px;
+      grid-template-columns: repeat(8, minmax(140px, 1fr));
+      gap: 12px;
       margin-bottom: 16px;
     }
 
     .card {
       background: rgba(20, 20, 20, 0.78);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 10px 10px;
-      min-height: 72px;
-      min-width: 0;
+      border-radius: 16px;
+      padding: 14px;
+      min-height: 88px;
     }
 
     .card .label {
       color: var(--muted);
-      font-size: 11px;
-      margin-bottom: 6px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: 12px;
+      margin-bottom: 8px;
     }
 
     .card .value {
-      font-size: 21px;
+      font-size: 25px;
       font-weight: 800;
       letter-spacing: -0.04em;
-      line-height: 1.2;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     .toolbar {
@@ -1413,6 +1405,18 @@
         if (!currentSourcesPackageId) return;
         savePackageState(currentSourcesPackageId, els.savePackageStateBtn);
       });
+      if (els.saveHandCheckBtn) {
+        els.saveHandCheckBtn.addEventListener('click', () => {
+          if (!currentSourcesPackageId) return;
+          saveHandCheckOptions(currentSourcesPackageId, els.saveHandCheckBtn);
+        });
+      }
+      if (els.confirmHandCheckBtn) {
+        els.confirmHandCheckBtn.addEventListener('click', () => {
+          if (!currentSourcesPackageId) return;
+          confirmHandCheckDone(currentSourcesPackageId, els.confirmHandCheckBtn);
+        });
+      }
       els.optionPackageStatus.addEventListener('change', () => {
         const isIgnored = els.optionPackageStatus.value === 'ignored';
         els.optionIgnoreReason.placeholder = isIgnored
@@ -2286,10 +2290,11 @@ async function requestSync(packageId, btn) {
             updated_at: new Date().toISOString()
           };
 
-      const { error } = await sb
+      const { data: updatedRows, error } = await sb
         .from('packages')
         .update(payload)
-        .eq('package_id', packageId);
+        .eq('package_id', packageId)
+        .select('*');
 
       btn.disabled = false;
       btn.textContent = 'Hand-Check speichern';
@@ -2299,7 +2304,13 @@ async function requestSync(packageId, btn) {
         return;
       }
 
-      patchPackageLocal(packageId, payload);
+      const updatedPackage = Array.isArray(updatedRows) ? updatedRows[0] : null;
+      if (!updatedPackage) {
+        alert('Hand-Check konnte nicht gespeichert werden: Es wurde kein Paket aktualisiert. Bitte Rechte/RLS prüfen.');
+        return;
+      }
+
+      patchPackageLocal(packageId, updatedPackage);
       renderPackagesPreserveScroll();
       renderHandCheckOptions();
       renderOptionStatusDetails();
