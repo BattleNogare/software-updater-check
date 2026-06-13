@@ -265,29 +265,38 @@
 
     .cards {
       display: grid;
-      grid-template-columns: repeat(8, minmax(140px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      gap: 8px;
       margin-bottom: 16px;
+      width: 100%;
     }
 
     .card {
       background: rgba(20, 20, 20, 0.78);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 14px;
-      min-height: 88px;
+      border-radius: 14px;
+      padding: 10px 9px;
+      min-height: 68px;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .card .label {
       color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 8px;
+      font-size: 10px;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .card .value {
-      font-size: 25px;
+      font-size: clamp(15px, 1.55vw, 22px);
       font-weight: 800;
       letter-spacing: -0.04em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .toolbar {
@@ -725,16 +734,16 @@
       }
 
       .card {
-        padding: 8px 7px;
-        min-height: 64px;
+        padding: 8px 6px;
+        min-height: 62px;
       }
 
       .card .label {
-        font-size: 10px;
+        font-size: 9px;
       }
 
       .card .value {
-        font-size: 18px;
+        font-size: 16px;
       }
     }
 
@@ -775,20 +784,20 @@
 
       .cards {
         grid-template-columns: repeat(9, minmax(0, 1fr));
-        gap: 4px;
+        gap: 3px;
       }
 
       .card {
-        padding: 7px 5px;
-        min-height: 56px;
+        padding: 6px 4px;
+        min-height: 52px;
       }
 
       .card .label {
-        font-size: 9px;
+        font-size: 8px;
       }
 
       .card .value {
-        font-size: 15px;
+        font-size: 13px;
       }
 
       .source-grid {
