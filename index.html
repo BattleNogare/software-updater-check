@@ -265,29 +265,37 @@
 
     .cards {
       display: grid;
-      grid-template-columns: repeat(8, minmax(140px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      gap: 8px;
       margin-bottom: 16px;
     }
 
     .card {
       background: rgba(20, 20, 20, 0.78);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 14px;
-      min-height: 88px;
+      border-radius: 14px;
+      padding: 10px 10px;
+      min-height: 72px;
+      min-width: 0;
     }
 
     .card .label {
       color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 8px;
+      font-size: 11px;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .card .value {
-      font-size: 25px;
+      font-size: 21px;
       font-weight: 800;
       letter-spacing: -0.04em;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .toolbar {
@@ -720,7 +728,21 @@
 
     @media (max-width: 1200px) {
       .cards {
-        grid-template-columns: repeat(4, minmax(140px, 1fr));
+        grid-template-columns: repeat(9, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .card {
+        padding: 8px 7px;
+        min-height: 64px;
+      }
+
+      .card .label {
+        font-size: 10px;
+      }
+
+      .card .value {
+        font-size: 18px;
       }
     }
 
@@ -760,7 +782,21 @@
       }
 
       .cards {
-        grid-template-columns: repeat(2, minmax(120px, 1fr));
+        grid-template-columns: repeat(9, minmax(0, 1fr));
+        gap: 4px;
+      }
+
+      .card {
+        padding: 7px 5px;
+        min-height: 56px;
+      }
+
+      .card .label {
+        font-size: 9px;
+      }
+
+      .card .value {
+        font-size: 15px;
       }
 
       .source-grid {
