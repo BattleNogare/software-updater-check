@@ -278,7 +278,8 @@
       padding: 10px 9px;
       min-height: 68px;
       min-width: 0;
-      overflow: hidden;
+      overflow: visible;
+      position: relative;
     }
 
     .card .label {
@@ -286,8 +287,67 @@
       font-size: 10px;
       margin-bottom: 6px;
       white-space: nowrap;
+      overflow: visible;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .card-label-text {
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    .card-info {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 15px;
+      border-radius: 999px;
+      border: 1px solid rgba(229, 229, 229, 0.22);
+      background: rgba(229, 229, 229, 0.08);
+      color: rgba(229, 229, 229, 0.72);
+      font-size: 10px;
+      line-height: 1;
+      cursor: help;
+      flex: 0 0 auto;
+      position: relative;
+      z-index: 5;
+    }
+
+    .card-info::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 8px);
+      transform: translateX(-50%);
+      width: max-content;
+      max-width: 260px;
+      background: rgba(10, 10, 10, 0.96);
+      border: 1px solid rgba(229, 229, 229, 0.18);
+      color: #f5f5f5;
+      border-radius: 10px;
+      padding: 8px 9px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.35;
+      white-space: normal;
+      opacity: 0;
+      pointer-events: none;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+      transition: opacity 0.14s ease, transform 0.14s ease;
+      z-index: 999;
+    }
+
+    .card-info:hover::after,
+    .card-info:focus::after {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-2px);
     }
 
     .card .value {
@@ -865,39 +925,39 @@
 
     <section id="adminCards" class="cards hidden">
       <div class="card">
-        <div class="label">Pakete gesamt</div>
+        <div class="label"><span class="card-label-text">Pakete gesamt</span><span class="card-info" tabindex="0" data-tip="Alle Pakete in der Datenbank, unabhängig vom Status.">🛈</span></div>
         <div id="statTotal" class="value">-</div>
       </div>
       <div class="card">
-        <div class="label">Updates</div>
+        <div class="label"><span class="card-label-text">Updates</span><span class="card-info" tabindex="0" data-tip="Aktive Pakete, bei denen eine neuere Online-Version gefunden wurde.">🛈</span></div>
         <div id="statUpdates" class="value">-</div>
       </div>
       <div class="card">
-        <div class="label">Fehler</div>
+        <div class="label"><span class="card-label-text">Fehler</span><span class="card-info" tabindex="0" data-tip="Pakete, deren letzte automatische Prüfung fehlgeschlagen ist.">🛈</span></div>
         <div id="statFailed" class="value">-</div>
       </div>
       <div class="card">
-        <div class="label">Unsicher</div>
+        <div class="label"><span class="card-label-text">Unsicher</span><span class="card-info" tabindex="0" data-tip="Pakete ohne eindeutiges Ergebnis, z. B. keine aktive Quelle oder keine Version gefunden.">🛈</span></div>
         <div id="statUncertain" class="value">-</div>
       </div>
       <div class="card">
-        <div class="label">Missing</div>
+        <div class="label"><span class="card-label-text">Missing</span><span class="card-info" tabindex="0" data-tip="Pakete, die als missing markiert sind.">🛈</span></div>
         <div id="statMissing" class="value">-</div>
       </div>
       <div class="card">
-        <div class="label">Stale</div>
+        <div class="label"><span class="card-label-text">Stale</span><span class="card-info" tabindex="0" data-tip="Aktive Pakete mit check_status = stale.">🛈</span></div>
         <div id="statStale" class="value">-</div>
       </div>
       <div class="card">
-        <div class="label">Hand-Check</div>
+        <div class="label"><span class="card-label-text">Hand-Check</span><span class="card-info" tabindex="0" data-tip="Nur fällige Hand-Checks mit check_status = hand_check. Timer/Wartezeit zählt hier nicht mit.">🛈</span></div>
         <div id="statHandCheck" class="value">-</div>
       </div>
       <div class="card">
-        <div class="label">Jobs queued</div>
+        <div class="label"><span class="card-label-text">Jobs queued</span><span class="card-info" tabindex="0" data-tip="Jobs, die in der Queue stehen und noch nicht verarbeitet wurden.">🛈</span></div>
         <div id="statQueued" class="value">-</div>
       </div>
       <div class="card">
-        <div class="label">Checks heute</div>
+        <div class="label"><span class="card-label-text">Checks heute</span><span class="card-info" tabindex="0" data-tip="Anzahl der package_checks seit Tagesbeginn.">🛈</span></div>
         <div id="statChecksToday" class="value">-</div>
       </div>
     </section>
@@ -913,6 +973,7 @@
         <option value="uncertain">Unsicher</option>
         <option value="stale">Stale</option>
         <option value="hand_check">Hand-Check</option>
+        <option value="hand_check_timer">Hand-Check-Timer</option>
         <option value="queued">Queued</option>
         <option value="checking">Checking</option>
         <option value="not_checked">Noch nicht geprüft</option>
@@ -1306,9 +1367,8 @@
       if (raw === 'update_available' || pkg?.update_available === true) return 'update_available';
       if (raw === 'hand_check') return 'hand_check';
 
-      // Hand-Check soll auch während der Wartezeit als Status angezeigt werden,
-      // solange kein Update/Fehler/laufender Job vorliegt.
-      if (pkg?.hand_check_enabled === true) return 'hand_check';
+      // Hand-Check-Wartezeit separat anzeigen, solange kein Update/Fehler/laufender Job vorliegt.
+      if (pkg?.hand_check_enabled === true) return 'hand_check_timer';
 
       return raw;
     }
@@ -1321,6 +1381,7 @@
       if (s === 'failed') return `<span class="pill red">Fehler</span>`;
       if (s === 'update_available' || updateAvailable) return `<span class="pill orange">Update</span>`;
       if (s === 'hand_check') return `<span class="pill yellow">Hand-Check</span>`;
+      if (s === 'hand_check_timer') return `<span class="pill blue">Hand-Check-Timer</span>`;
       if (s === 'skipped') return `<span class="pill gray">Skipped</span>`;
       if (s === 'up_to_date') return `<span class="pill green">Aktuell</span>`;
       if (s === 'uncertain') return `<span class="pill yellow">Unsicher</span>`;
@@ -1336,7 +1397,7 @@
     }
 
     function skippedReason(pkg, effectiveStatus = getEffectiveStatus(pkg)) {
-      if (effectiveStatus === 'hand_check') {
+      if (effectiveStatus === 'hand_check' || effectiveStatus === 'hand_check_timer') {
         let reason = '';
         if (pkg?.hand_check_target_version) {
           reason = `Warte auf lokale Version >= ${pkg.hand_check_target_version}`;
