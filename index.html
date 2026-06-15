@@ -1480,11 +1480,11 @@
     };
 
     function canMaintain() {
-      return ['admin', 'maintainer', 'manager'].includes(currentRole);
+      return !!currentUser;
     }
 
     function canAdmin() {
-      return ['admin', 'maintainer', 'manager'].includes(currentRole);
+      return !!currentUser;
     }
 
     function setMessage(el, text, type = '') {
@@ -1756,16 +1756,10 @@
     }
 
     async function loadRole() {
-      const { data, error } = await sb.rpc('current_user_role');
-
-      if (error) {
-        currentRole = 'viewer';
-        console.error(error);
-      } else {
-        currentRole = data || 'viewer';
-      }
-
-      els.userRole.textContent = currentRole;
+      // Kein rollenbasiertes Berechtigungssystem in der Weboberfläche:
+      // Jeder eingeloggte Benutzer darf Sync/Optionen nutzen.
+      currentRole = currentUser ? 'eingeloggt' : 'viewer';
+      els.userRole.textContent = currentUser ? 'eingeloggt' : '-';
       if (els.adminCards) els.adminCards.classList.remove('hidden');
     }
 
@@ -2131,8 +2125,8 @@
     }
 
 async function requestSync(packageId, btn) {
-  if (!canMaintain()) {
-    alert('Du hast keine Berechtigung, einen Sync zu starten.');
+  if (!currentUser) {
+    alert('Bitte zuerst einloggen.');
     return;
   }
 
