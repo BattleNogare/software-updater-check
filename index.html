@@ -463,7 +463,7 @@
     th:nth-child(6), td:nth-child(6) { width: 8%; }
     th:nth-child(7), td:nth-child(7) { width: 10%; }
     th:nth-child(8), td:nth-child(8) { width: 10%; }
-    th:nth-child(9), td:nth-child(9) { width: 11%; min-width: 0; }
+    th:nth-child(9), td:nth-child(9) { width: 11%; min-width: 132px; }
 
     thead {
       background: rgba(10, 10, 10, 0.92);
@@ -962,7 +962,7 @@
       th:nth-child(5), td:nth-child(5) { width: 18%; }
       th:nth-child(6), td:nth-child(6) { width: 12%; }
       th:nth-child(8), td:nth-child(8) { width: 14%; }
-      th:nth-child(9), td:nth-child(9) { width: 14%; min-width: 0; }
+      th:nth-child(9), td:nth-child(9) { width: 14%; min-width: 110px; }
     }
 
     @media (max-width: 1640px) {
@@ -1399,6 +1399,7 @@
     let appLoaded = false;
     let lastLoadedUserId = null;
     let loadAllPromise = null;
+    const syncPollTimers = new Map();
 
     const $ = (id) => document.getElementById(id);
 
@@ -1479,7 +1480,7 @@
     };
 
     function canMaintain() {
-      return currentRole === 'maintainer' || currentRole === 'admin';
+      return ['admin', 'maintainer', 'manager'].includes(currentRole);
     }
 
     function canAdmin() {
@@ -2130,39 +2131,169 @@
     }
 
 async function requestSync(packageId, btn) {
-  if (!canMaintain()) return;
-
-  btn.disabled = true;
-  btn.textContent = 'Queued ...';
-
-  const { data, error } = await sb.rpc('request_package_check', {
-    target_package_id: packageId
-  });
-
-  if (error) {
-    alert(`Fehler beim Sync-Job: ${error.message}`);
-    btn.disabled = false;
-    btn.textContent = 'Sync';
+  if (!canMaintain()) {
+    alert('Du hast keine Berechtigung, einen Sync zu starten.');
     return;
   }
 
-  // Wichtig:
-  // Der Sync-Button erstellt nur den local_check Job.
-  // Dieser Job muss vom local-runner verarbeitet werden, damit Dev2-Version und Git-Version gelesen werden.
-  // Die Edge Function process-check-jobs verarbeitet nur Online-Jobs und darf local_check nicht übernehmen.
-  btn.textContent = 'Queued';
+  const pkg = packages.find((p) => p.package_id === packageId);
+  if (!pkg) return;
+
+  const originalText = btn?.textContent || 'Sync';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Queued ...';
+  }
 
   const now = new Date().toISOString();
+  const deadline = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+  // Sofort lokal auf queued setzen, damit Status und Button direkt korrekt reagieren,
+  // auch wenn das Paket vorher noch auf Update stand.
   patchPackageLocal(packageId, {
     check_status: 'queued',
     check_message: 'local_check wurde über die Website in die Queue gelegt.',
     local_sync_status: 'queued',
     local_sync_message: 'local_check wurde über die Website in die Queue gelegt.',
     local_sync_requested_at: now,
+    local_sync_deadline_at: deadline,
     updated_at: now
   });
   renderPackagesPreserveScroll();
+
+  let createdOrAlreadyQueued = false;
+  let lastError = null;
+
+  try {
+    const { data: existingJob, error: existingError } = await sb
+      .from('check_jobs')
+      .select('id,status,job_type')
+      .eq('package_id', packageId)
+      .in('status', ['queued', 'running'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingError && existingJob) {
+      createdOrAlreadyQueued = true;
+    }
+  } catch (err) {
+    console.warn('Aktive Jobs konnten nicht geprüft werden:', err);
+  }
+
+  if (!createdOrAlreadyQueued) {
+    const jobPayload = {
+      package_id: packageId,
+      requested_by: currentUser?.id || null,
+      job_type: 'local_check',
+      status: 'queued',
+      priority: 1,
+      message: 'local_check wurde über die Website in die Queue gelegt.',
+      created_at: now,
+      deadline_at: deadline
+    };
+
+    const { error: insertError } = await sb
+      .from('check_jobs')
+      .insert(jobPayload);
+
+    if (insertError) {
+      lastError = insertError;
+      console.warn('Direktes Erstellen des local_check Jobs fehlgeschlagen, versuche RPC-Fallback:', insertError);
+
+      const { error: rpcError } = await sb.rpc('request_package_check', {
+        target_package_id: packageId
+      });
+
+      if (rpcError) {
+        lastError = rpcError;
+      } else {
+        createdOrAlreadyQueued = true;
+      }
+    } else {
+      createdOrAlreadyQueued = true;
+    }
+  }
+
+  if (!createdOrAlreadyQueued) {
+    alert(`Fehler beim Sync-Job: ${lastError?.message || 'Job konnte nicht angelegt werden.'}`);
+    await refreshSinglePackage(packageId);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+    return;
+  }
+
+  startSyncPoll(packageId);
   loadAdminStats();
+}
+
+async function refreshSinglePackage(packageId, preserveScroll = true) {
+  const y = window.scrollY;
+  const { data, error } = await sb
+    .from('packages')
+    .select('*')
+    .eq('package_id', packageId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(`Paket ${packageId} konnte nicht aktualisiert werden:`, error);
+    return null;
+  }
+
+  if (data) {
+    patchPackageLocal(packageId, data);
+    if (preserveScroll) {
+      renderPackagesPreserveScroll(y);
+    } else {
+      renderPackages();
+    }
+  }
+
+  return data;
+}
+
+async function hasActiveSyncJob(packageId) {
+  const { data, error } = await sb
+    .from('check_jobs')
+    .select('id,status,job_type')
+    .eq('package_id', packageId)
+    .in('status', ['queued', 'running'])
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.warn(`Aktiver Sync-Job für ${packageId} konnte nicht geprüft werden:`, error);
+    return null;
+  }
+
+  return Array.isArray(data) && data.length > 0;
+}
+
+function startSyncPoll(packageId) {
+  if (syncPollTimers.has(packageId)) {
+    clearInterval(syncPollTimers.get(packageId));
+    syncPollTimers.delete(packageId);
+  }
+
+  const poll = async () => {
+    const pkg = await refreshSinglePackage(packageId);
+    const activeJob = await hasActiveSyncJob(packageId);
+    const stillPendingByPackage = isSyncPending(pkg || packages.find((p) => p.package_id === packageId));
+
+    if (activeJob === false && !stillPendingByPackage) {
+      clearInterval(syncPollTimers.get(packageId));
+      syncPollTimers.delete(packageId);
+      await loadAdminStats();
+    }
+  };
+
+  const timer = setInterval(poll, 5000);
+  syncPollTimers.set(packageId, timer);
+
+  // Erste Aktualisierung etwas verzögert, damit der local-runner den Job bereits übernehmen kann.
+  setTimeout(poll, 2500);
 }
 
 
