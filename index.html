@@ -1701,7 +1701,7 @@
         return;
       }
 
-      await loadRole();
+      loadRole();
       await loadAll({ force: true });
       appLoaded = true;
       lastLoadedUserId = currentUser?.id || null;
@@ -1755,11 +1755,11 @@
       await sb.auth.signOut();
     }
 
-    async function loadRole() {
-      // Kein rollenbasiertes Berechtigungssystem in der Weboberfläche:
-      // Jeder eingeloggte Benutzer darf Sync/Optionen nutzen.
-      currentRole = currentUser ? 'eingeloggt' : 'viewer';
-      els.userRole.textContent = currentUser ? 'eingeloggt' : '-';
+    function loadRole() {
+      // Kein Rollen-/Berechtigungssystem in der Website.
+      // Jeder eingeloggte Benutzer darf die Verwaltungsfunktionen verwenden.
+      currentRole = 'angemeldet';
+      if (els.userRole) els.userRole.textContent = 'angemeldet';
       if (els.adminCards) els.adminCards.classList.remove('hidden');
     }
 
@@ -2502,10 +2502,17 @@ function startSyncPoll(packageId) {
       btn.disabled = true;
       btn.textContent = 'Speichere ...';
 
-      const { error } = await sb.rpc('update_installation_count', {
-        target_package_id: packageId,
-        new_installation_count: count
-      });
+      const now = new Date().toISOString();
+      const { data: updatedRows, error } = await sb
+        .from('packages')
+        .update({
+          installation_count: count,
+          installation_count_source: 'manual',
+          installation_count_updated_at: now,
+          updated_at: now
+        })
+        .eq('package_id', packageId)
+        .select('package_id, installation_count, installation_count_source, installation_count_updated_at, updated_at');
 
       btn.disabled = false;
       btn.textContent = 'Speichern';
@@ -2515,13 +2522,13 @@ function startSyncPoll(packageId) {
         return;
       }
 
-      const now = new Date().toISOString();
-      patchPackageLocal(packageId, {
-        installation_count: count,
-        installation_count_source: 'manual',
-        installation_count_updated_at: now,
-        updated_at: now
-      });
+      const updatedPackage = Array.isArray(updatedRows) ? updatedRows[0] : null;
+      if (!updatedPackage) {
+        alert('Installationsanzahl konnte nicht gespeichert werden: Es wurde kein Paket aktualisiert. Bitte RLS/Policies prüfen.');
+        return;
+      }
+
+      patchPackageLocal(packageId, updatedPackage);
       renderPackagesPreserveScroll();
 
       if (currentSourcesPackageId === packageId && els.sourcesDialog.open) {
