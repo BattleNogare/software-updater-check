@@ -1,0 +1,3494 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Software Update Manager</title>
+  <link rel="icon" href="favicon.ico" sizes="any" />
+  <link rel="shortcut icon" href="favicon.ico" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    :root {
+      --bg: #080808;
+      --panel: #141414;
+      --panel-2: #1f1f1f;
+      --text: #f5f5f5;
+      --muted: #a3a3a3;
+      --border: rgba(229, 229, 229, 0.18);
+      --accent: #d4d4d4;
+      --accent-2: #525252;
+      --green: #d4d4d4;
+      --yellow: #bdbdbd;
+      --orange: #e5e5e5;
+      --red: #f5f5f5;
+      --blue: #c0c0c0;
+      --gray: #737373;
+      --shadow: 0 20px 60px rgba(0,0,0,0.45);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(245, 245, 245, 0.08), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(163, 163, 163, 0.08), transparent 35%),
+        var(--bg);
+      color: var(--text);
+    }
+
+    body.modal-open {
+      overflow: hidden;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .page {
+      width: min(1500px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 26px 0 46px;
+    }
+
+    .login-shell {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .login-card {
+      width: min(440px, 100%);
+      background: rgba(20, 20, 20, 0.94);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 28px;
+      backdrop-filter: blur(18px);
+    }
+
+    .login-card h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: -0.04em;
+    }
+
+    .login-card p {
+      margin: 0 0 22px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+      margin-bottom: 14px;
+    }
+
+    .field label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .input,
+    .select,
+    .textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: rgba(10, 10, 10, 0.72);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 11px 12px;
+      outline: none;
+    }
+
+    .textarea {
+      min-height: 86px;
+      resize: vertical;
+    }
+
+    .input:focus,
+    .select:focus,
+    .textarea:focus {
+      border-color: rgba(229, 229, 229, 0.65);
+      box-shadow: 0 0 0 3px rgba(229, 229, 229, 0.10);
+    }
+
+    .btn {
+      border: 1px solid transparent;
+      background: linear-gradient(180deg, #737373, #525252);
+      color: white;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-weight: 700;
+      transition: 0.16s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn.secondary {
+      background: rgba(38, 38, 38, 0.72);
+      border-color: var(--border);
+      color: var(--text);
+    }
+
+    .btn.danger {
+      background: rgba(245, 245, 245, 0.10);
+      border-color: rgba(245, 245, 245, 0.28);
+      color: #f5f5f5;
+    }
+
+    .btn.small {
+      padding: 7px 10px;
+      border-radius: 10px;
+      font-size: 13px;
+    }
+
+    .login-actions {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .message {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .message.error {
+      color: #fecaca;
+    }
+
+    .message.ok {
+      color: #bbf7d0;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .brand-title {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-logo {
+      width: clamp(42px, 5vw, 64px);
+      height: clamp(42px, 5vw, 64px);
+      object-fit: contain;
+      flex: 0 0 auto;
+      filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.35));
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: clamp(25px, 3vw, 40px);
+      letter-spacing: -0.055em;
+    }
+
+    .brand p {
+      margin: 8px 0 0;
+      color: var(--muted);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .user-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(20, 20, 20, 0.78);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 8px 8px 14px;
+    }
+
+    .user-meta {
+      text-align: right;
+      line-height: 1.25;
+      font-size: 13px;
+    }
+
+    .user-email {
+      color: var(--text);
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .user-role {
+      color: var(--muted);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+      width: 100%;
+    }
+
+    .card {
+      background: rgba(20, 20, 20, 0.78);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 9px;
+      min-height: 68px;
+      min-width: 0;
+      overflow: visible;
+      position: relative;
+    }
+
+    .card .label {
+      color: var(--muted);
+      font-size: 10px;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: visible;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .card-label-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    .card-info {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 15px;
+      border-radius: 999px;
+      border: 1px solid rgba(229, 229, 229, 0.22);
+      background: rgba(229, 229, 229, 0.08);
+      color: rgba(229, 229, 229, 0.72);
+      font-size: 10px;
+      line-height: 1;
+      cursor: help;
+      flex: 0 0 auto;
+      position: relative;
+      z-index: 5;
+    }
+
+    .card-info::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 8px);
+      transform: translateX(-50%);
+      width: max-content;
+      max-width: 260px;
+      background: rgba(10, 10, 10, 0.96);
+      border: 1px solid rgba(229, 229, 229, 0.18);
+      color: #f5f5f5;
+      border-radius: 10px;
+      padding: 8px 9px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.35;
+      white-space: normal;
+      opacity: 0;
+      pointer-events: none;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+      transition: opacity 0.14s ease, transform 0.14s ease;
+      z-index: 999;
+    }
+
+    .card-info:hover::after,
+    .card-info:focus::after {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-2px);
+    }
+
+    .card .value {
+      font-size: clamp(15px, 1.55vw, 22px);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto auto;
+      gap: 10px;
+      margin: 16px 0 8px;
+      background: rgba(20, 20, 20, 0.78);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+    }
+
+    .selection-count {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 0 0 10px 4px;
+    }
+
+    .status-reason {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      margin-top: 5px;
+      max-width: 220px;
+    }
+
+
+
+    .alphabet-nav {
+      position: fixed;
+      left: clamp(8px, calc((100vw - 1500px) / 4 - 20px), 120px);
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 10px 7px;
+      background: rgba(20, 20, 20, 0.86);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .alphabet-nav button {
+      width: 32px;
+      height: 26px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .alphabet-nav button:hover,
+    .alphabet-nav button.active {
+      background: rgba(229, 229, 229, 0.14);
+      color: var(--text);
+    }
+
+    .alphabet-nav button:disabled {
+      opacity: 0.23;
+      cursor: default;
+    }
+
+    tr.alpha-anchor td {
+      border-top: 2px solid rgba(229, 229, 229, 0.22);
+    }
+
+    .table-shell {
+      overflow: visible;
+      max-height: none;
+      background: rgba(20, 20, 20, 0.78);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      scroll-behavior: smooth;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 0;
+      table-layout: fixed;
+    }
+
+    /* Kompakte Spaltenbreiten, damit die Aktionen nicht rechts über den Rand laufen. */
+    th:nth-child(1), td:nth-child(1) { width: 22%; }
+    th:nth-child(2), td:nth-child(2) { width: 9%; }
+    th:nth-child(3), td:nth-child(3) { width: 9%; }
+    th:nth-child(4), td:nth-child(4) { width: 9%; }
+    th:nth-child(5), td:nth-child(5) { width: 12%; }
+    th:nth-child(6), td:nth-child(6) { width: 8%; }
+    th:nth-child(7), td:nth-child(7) { width: 10%; }
+    th:nth-child(8), td:nth-child(8) { width: 10%; }
+    th:nth-child(9), td:nth-child(9) { width: 11%; min-width: 132px; }
+
+    thead {
+      background: rgba(10, 10, 10, 0.92);
+    }
+
+    .table-shell thead th {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: rgba(10, 10, 10, 0.98);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 1px 0 rgba(148, 163, 184, 0.22), 0 10px 24px rgba(0, 0, 0, 0.22);
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: middle;
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    td {
+      overflow-wrap: anywhere;
+    }
+
+    td:nth-child(9) {
+      overflow: visible;
+      white-space: normal;
+    }
+
+    th {
+      color: #cbd5e1;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    th.sortable {
+      cursor: pointer;
+    }
+
+    th.sortable:hover {
+      color: white;
+    }
+
+    tbody tr:hover {
+      background: rgba(229, 229, 229, 0.06);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .pkg-name {
+      font-weight: 800;
+      color: white;
+    }
+
+    .pkg-id {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 800;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .pill.green {
+      color: #f5f5f5;
+      background: rgba(212, 212, 212, 0.12);
+      border-color: rgba(212, 212, 212, 0.28);
+    }
+
+    .pill.yellow {
+      color: #e5e5e5;
+      background: rgba(163, 163, 163, 0.14);
+      border-color: rgba(163, 163, 163, 0.30);
+    }
+
+    .pill.orange {
+      color: #ffffff;
+      background: rgba(229, 229, 229, 0.16);
+      border-color: rgba(229, 229, 229, 0.34);
+    }
+
+    .pill.red {
+      color: #ffffff;
+      background: rgba(245, 245, 245, 0.18);
+      border-color: rgba(245, 245, 245, 0.36);
+    }
+
+    .pill.blue {
+      color: #e5e5e5;
+      background: rgba(192, 192, 192, 0.14);
+      border-color: rgba(192, 192, 192, 0.30);
+    }
+
+    .pill.gray {
+      color: #d4d4d4;
+      background: rgba(115, 115, 115, 0.16);
+      border-color: rgba(115, 115, 115, 0.30);
+    }
+
+    /* Statusfarben: nur ausgewählte Status leuchten bewusst. */
+    .pill.green {
+      color: #35ff8a;
+      background: rgba(34, 197, 94, 0.08);
+      border-color: rgba(34, 197, 94, 0.58);
+      text-shadow: 0 0 8px rgba(53, 255, 138, 0.85), 0 0 18px rgba(34, 197, 94, 0.45);
+      box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.08), 0 0 18px rgba(34, 197, 94, 0.22);
+    }
+
+    .pill.blue {
+      color: #38bdf8;
+      background: rgba(14, 165, 233, 0.08);
+      border-color: rgba(56, 189, 248, 0.58);
+      text-shadow: 0 0 8px rgba(56, 189, 248, 0.9), 0 0 18px rgba(14, 165, 233, 0.48);
+      box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.08), 0 0 18px rgba(14, 165, 233, 0.22);
+    }
+
+    .pill.orange {
+      color: #fb923c;
+      background: rgba(249, 115, 22, 0.08);
+      border-color: rgba(251, 146, 60, 0.58);
+      text-shadow: 0 0 8px rgba(251, 146, 60, 0.9), 0 0 18px rgba(249, 115, 22, 0.48);
+      box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.08), 0 0 18px rgba(249, 115, 22, 0.22);
+    }
+
+    .pill.pink {
+      color: #f472b6;
+      background: rgba(236, 72, 153, 0.08);
+      border-color: rgba(244, 114, 182, 0.60);
+      text-shadow: 0 0 8px rgba(244, 114, 182, 0.9), 0 0 18px rgba(236, 72, 153, 0.48);
+      box-shadow: 0 0 0 1px rgba(236, 72, 153, 0.08), 0 0 18px rgba(236, 72, 153, 0.22);
+    }
+
+    .pill.red {
+      color: #ff5c7a;
+      background: rgba(239, 68, 68, 0.08);
+      border-color: rgba(248, 113, 113, 0.60);
+      text-shadow: 0 0 8px rgba(255, 92, 122, 0.9), 0 0 18px rgba(239, 68, 68, 0.50);
+      box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.08), 0 0 18px rgba(239, 68, 68, 0.22);
+    }
+
+    .pill.plain,
+    .pill.gray {
+      color: #d4d4d4;
+      background: rgba(115, 115, 115, 0.16);
+      border-color: rgba(115, 115, 115, 0.30);
+      text-shadow: none;
+      box-shadow: none;
+    }
+
+    .card.neon-green {
+      border-color: rgba(34, 197, 94, 0.54);
+      box-shadow: 0 0 22px rgba(34, 197, 94, 0.22), inset 0 0 20px rgba(34, 197, 94, 0.035);
+    }
+    .card.neon-green .value { color: #35ff8a; text-shadow: 0 0 12px rgba(53, 255, 138, 0.75); }
+
+    .card.neon-blue {
+      border-color: rgba(56, 189, 248, 0.54);
+      box-shadow: 0 0 22px rgba(14, 165, 233, 0.22), inset 0 0 20px rgba(14, 165, 233, 0.035);
+    }
+    .card.neon-blue .value { color: #38bdf8; text-shadow: 0 0 12px rgba(56, 189, 248, 0.78); }
+
+    .card.neon-orange {
+      border-color: rgba(251, 146, 60, 0.54);
+      box-shadow: 0 0 22px rgba(249, 115, 22, 0.22), inset 0 0 20px rgba(249, 115, 22, 0.035);
+    }
+    .card.neon-orange .value { color: #fb923c; text-shadow: 0 0 12px rgba(251, 146, 60, 0.78); }
+
+    .card.neon-pink {
+      border-color: rgba(244, 114, 182, 0.56);
+      box-shadow: 0 0 22px rgba(236, 72, 153, 0.24), inset 0 0 20px rgba(236, 72, 153, 0.035);
+    }
+    .card.neon-pink .value { color: #f472b6; text-shadow: 0 0 12px rgba(244, 114, 182, 0.78); }
+
+    .card.neon-red {
+      border-color: rgba(248, 113, 113, 0.56);
+      box-shadow: 0 0 22px rgba(239, 68, 68, 0.24), inset 0 0 20px rgba(239, 68, 68, 0.035);
+    }
+    .card.neon-red .value { color: #ff5c7a; text-shadow: 0 0 12px rgba(255, 92, 122, 0.78); }
+
+    .row-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .row-actions .btn.small {
+      width: 100%;
+      min-width: 0;
+      padding: 6px 7px;
+      font-size: 11px;
+      line-height: 1.12;
+      white-space: normal;
+      word-break: keep-all;
+    }
+
+    .install-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .install-box input {
+      width: 90px;
+      padding: 7px 8px;
+      border-radius: 10px;
+    }
+
+    dialog {
+      width: min(1700px, calc(100% - 18px));
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 0;
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      max-width: calc(100vw - 18px);
+      max-height: min(92vh, 980px);
+      overflow: hidden;
+    }
+
+    dialog[open] {
+      display: flex;
+      flex-direction: column;
+    }
+
+    dialog::backdrop {
+      background: rgba(2, 6, 23, 0.76);
+      backdrop-filter: blur(6px);
+    }
+
+    .dialog-head {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dialog-head h2 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -0.04em;
+    }
+
+    .dialog-head p {
+      margin: 5px 0 0;
+      color: var(--muted);
+    }
+
+    .dialog-body {
+      padding: 20px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+
+    .source-grid {
+      display: grid;
+      grid-template-columns: 78px 145px minmax(240px, 1fr) 180px minmax(240px, 1fr) 150px 82px 82px 78px auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+      padding: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 14px;
+      background: rgba(10, 10, 10, 0.48);
+    }
+
+    .source-field-caption {
+      color: var(--muted);
+      font-size: 11px;
+      margin: 0 0 4px;
+    }
+
+    .source-cell {
+      min-width: 0;
+    }
+
+    .source-note-row {
+      grid-column: 1 / -1;
+    }
+
+    .source-help {
+      margin-top: -6px;
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border: 1px solid rgba(229, 229, 229, 0.12);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .source-help code {
+      color: var(--text);
+      background: rgba(255,255,255,0.08);
+      border-radius: 6px;
+      padding: 1px 5px;
+    }
+
+
+    .status-details-card {
+      margin-bottom: 18px;
+    }
+
+    .status-detail-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+      margin-bottom: 10px;
+    }
+
+    .status-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 10px 0 12px;
+    }
+
+    .status-detail-box {
+      border: 1px solid rgba(229, 229, 229, 0.12);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .status-detail-box .caption {
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .status-detail-box .content {
+      color: var(--text);
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .check-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .check-item {
+      border: 1px solid rgba(229, 229, 229, 0.12);
+      border-radius: 14px;
+      background: rgba(10, 10, 10, 0.42);
+      padding: 12px;
+    }
+
+    .check-item-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .check-title {
+      font-weight: 800;
+      color: white;
+    }
+
+    .check-message {
+      line-height: 1.45;
+      color: #e5e5e5;
+      margin-top: 6px;
+      white-space: pre-wrap;
+    }
+
+    .check-error {
+      margin-top: 8px;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      background: rgba(239, 68, 68, 0.10);
+      color: #fecaca;
+      border-radius: 10px;
+      padding: 9px 10px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    details.check-raw {
+      margin-top: 8px;
+      color: var(--muted);
+    }
+
+    details.check-raw summary {
+      cursor: pointer;
+      user-select: none;
+      font-weight: 700;
+    }
+
+    details.check-raw pre {
+      max-height: 280px;
+      overflow: auto;
+      border: 1px solid rgba(229, 229, 229, 0.12);
+      background: rgba(0, 0, 0, 0.36);
+      border-radius: 10px;
+      padding: 10px;
+      color: #e5e5e5;
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+
+    .dialog-footer {
+      flex: 0 0 auto;
+      padding: 16px 20px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .empty {
+      padding: 40px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    @media (max-width: 1200px) {
+      .cards {
+        grid-template-columns: repeat(9, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .card {
+        padding: 8px 6px;
+        min-height: 62px;
+      }
+
+      .card .label {
+        font-size: 9px;
+      }
+
+      .card .value {
+        font-size: 16px;
+      }
+    }
+
+
+
+
+    @media (max-width: 1280px) {
+      .page { width: min(100%, calc(100% - 18px)); }
+      th, td { padding: 9px 6px; font-size: 12px; }
+      th { font-size: 10px; letter-spacing: 0.025em; }
+      .pkg-id { font-size: 10px; }
+      .row-actions .btn.small { font-size: 10px; padding: 5px 6px; }
+      .pill { font-size: 10px; padding: 4px 7px; }
+    }
+
+    @media (max-width: 980px) {
+      th:nth-child(2), td:nth-child(2),
+      th:nth-child(3), td:nth-child(3),
+      th:nth-child(7), td:nth-child(7) {
+        display: none;
+      }
+      th:nth-child(1), td:nth-child(1) { width: 27%; }
+      th:nth-child(4), td:nth-child(4) { width: 15%; }
+      th:nth-child(5), td:nth-child(5) { width: 18%; }
+      th:nth-child(6), td:nth-child(6) { width: 12%; }
+      th:nth-child(8), td:nth-child(8) { width: 14%; }
+      th:nth-child(9), td:nth-child(9) { width: 14%; min-width: 110px; }
+    }
+
+    @media (max-width: 1640px) {
+      .alphabet-nav {
+        display: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .topbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .top-actions {
+        justify-content: stretch;
+      }
+
+      .top-actions > .btn,
+      .top-actions > .user-box {
+        width: 100%;
+      }
+
+      .user-box {
+        justify-content: space-between;
+        border-radius: 16px;
+      }
+
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .alphabet-nav {
+        display: none;
+      }
+
+      .cards {
+        grid-template-columns: repeat(9, minmax(0, 1fr));
+        gap: 3px;
+      }
+
+      .card {
+        padding: 6px 4px;
+        min-height: 52px;
+      }
+
+      .card .label {
+        font-size: 8px;
+      }
+
+      .card .value {
+        font-size: 13px;
+      }
+
+      .source-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .source-note-row {
+        grid-column: auto;
+      }
+
+      .status-detail-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <nav id="alphabetNav" class="alphabet-nav hidden" aria-label="Alphabetische Paketnavigation"></nav>
+  <section id="loginView" class="login-shell">
+    <div class="login-card">
+      <h1>Software Update Manager</h1>
+      <p>Bitte anmelden, um die Paketübersicht zu öffnen.</p>
+
+      <div class="field">
+        <label for="loginEmail">E-Mail</label>
+        <input id="loginEmail" class="input" type="email" autocomplete="email" />
+      </div>
+
+      <div class="field">
+        <label for="loginPassword">Passwort</label>
+        <input id="loginPassword" class="input" type="password" autocomplete="current-password" />
+      </div>
+
+      <div class="login-actions">
+        <button id="loginBtn" class="btn">Anmelden</button>
+        <button id="signupBtn" class="btn secondary hidden">Registrieren</button>
+      </div>
+
+      <div id="loginMessage" class="message"></div>
+    </div>
+  </section>
+
+  <main id="appView" class="page hidden">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-title">
+          <img src="logo.png" alt="" class="brand-logo" />
+          <h1>Software Update Manager</h1>
+        </div>
+        <p>Übersicht deiner Pakete, Dev2-/Git-Versionen, Online-Versionen, Quellen und Installationszahlen.</p>
+      </div>
+
+      <div class="top-actions">
+        <button id="packageChecksBtn" class="btn secondary small" type="button">Paket-Checks</button>
+        <div class="user-box">
+          <div class="user-meta">
+            <div id="userEmail" class="user-email">-</div>
+            <div id="userRole" class="user-role">-</div>
+          </div>
+          <button id="logoutBtn" class="btn secondary small">Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <section id="adminCards" class="cards">
+      <div class="card">
+        <div class="label"><span class="card-label-text">Pakete gesamt</span><span class="card-info" tabindex="0" data-tip="Alle Pakete in der Datenbank, unabhängig vom Status.">🛈</span></div>
+        <div id="statTotal" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label"><span class="card-label-text">Updates</span><span class="card-info" tabindex="0" data-tip="Aktive Pakete, bei denen eine neuere Online-Version gefunden wurde.">🛈</span></div>
+        <div id="statUpdates" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label"><span class="card-label-text">Fehler</span><span class="card-info" tabindex="0" data-tip="Pakete, deren letzte automatische Prüfung fehlgeschlagen ist.">🛈</span></div>
+        <div id="statFailed" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label"><span class="card-label-text">Unsicher</span><span class="card-info" tabindex="0" data-tip="Pakete ohne eindeutiges Ergebnis, z. B. keine aktive Quelle oder keine Version gefunden.">🛈</span></div>
+        <div id="statUncertain" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label"><span class="card-label-text">Missing</span><span class="card-info" tabindex="0" data-tip="Pakete, die als missing markiert sind.">🛈</span></div>
+        <div id="statMissing" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label"><span class="card-label-text">Stale</span><span class="card-info" tabindex="0" data-tip="Aktive Pakete mit check_status = stale.">🛈</span></div>
+        <div id="statStale" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label"><span class="card-label-text">Hand-Check</span><span class="card-info" tabindex="0" data-tip="Nur fällige Hand-Checks mit check_status = hand_check. Timer/Wartezeit zählt hier nicht mit.">🛈</span></div>
+        <div id="statHandCheck" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label"><span class="card-label-text">Jobs queued</span><span class="card-info" tabindex="0" data-tip="Jobs, die in der Queue stehen und noch nicht verarbeitet wurden.">🛈</span></div>
+        <div id="statQueued" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label"><span class="card-label-text">Checks heute</span><span class="card-info" tabindex="0" data-tip="Anzahl der package_checks seit Tagesbeginn.">🛈</span></div>
+        <div id="statChecksToday" class="value">-</div>
+      </div>
+    </section>
+
+    <section class="toolbar">
+      <input id="searchInput" class="input" placeholder="Suche nach Paketname, ID, Dev2-/Git-/Online-Version, Status ..." />
+
+      <select id="statusFilter" class="select">
+        <option value="">Alle Status</option>
+        <option value="update_available">Updates verfügbar</option>
+        <option value="up_to_date">Aktuell</option>
+        <option value="failed">Fehler</option>
+        <option value="uncertain">Unsicher</option>
+        <option value="stale">Stale</option>
+        <option value="hand_check">Hand-Check</option>
+        <option value="hand_check_timer">Hand-Check-Timer</option>
+        <option value="queued">Queued</option>
+        <option value="checking">Checking</option>
+        <option value="not_checked">Noch nicht geprüft</option>
+      </select>
+
+      <select id="packageStatusFilter" class="select">
+        <option value="">Alle Pakete</option>
+        <option value="active">Aktiv</option>
+        <option value="ignored">Ignoriert</option>
+        <option value="missing">Missing</option>
+        <option value="archived">Archiviert</option>
+        <option value="deprecated">Deprecated</option>
+        <option value="broken">Broken</option>
+      </select>
+
+      <button id="reloadBtn" class="btn secondary">Neu laden</button>
+      <button id="openInstallImportBtn" class="btn" title="Installationszahlen importieren">+</button>
+    </section>
+    <div id="selectionCount" class="selection-count">0 Pakete in der aktuellen Auswahl</div>
+
+    <section class="table-shell">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="name">Paket</th>
+            <th class="sortable" data-sort="local_dev2_version">Dev2-Version</th>
+            <th class="sortable" data-sort="git_version">Git-Version</th>
+            <th class="sortable" data-sort="online_version">Online-Version</th>
+            <th class="sortable" data-sort="check_status">Status</th>
+            <th class="sortable" data-sort="installation_count">Anzahl Installationen</th>
+            <th class="sortable" data-sort="git_last_package_update">Letztes GIT-Update</th>
+            <th class="sortable" data-sort="last_checked">Letzte Abfrage</th>
+            <th>Aktionen</th>
+          </tr>
+        </thead>
+        <tbody id="packageTbody">
+          <tr>
+            <td colspan="9" class="empty">Lade Daten ...</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <dialog id="sourcesDialog">
+    <div class="dialog-head">
+      <div>
+        <h2 id="sourcesTitle">Optionen</h2>
+        <p id="sourcesSubtitle">Quellen und Installationsanzahl für dieses Paket bearbeiten.</p>
+      </div>
+      <button id="closeSourcesBtn" class="btn secondary small">Schließen</button>
+    </div>
+
+    <div class="dialog-body">
+      <section class="card" style="margin-bottom:18px;">
+        <div class="label">Anzahl Installationen</div>
+        <div class="install-box" style="margin-top:8px;align-items:flex-end;">
+          <div class="field" style="margin:0;max-width:180px;">
+            <label for="optionInstallCount">Installationen</label>
+            <input id="optionInstallCount" class="input" type="number" min="0" value="0" />
+          </div>
+          <button id="saveOptionInstallBtn" class="btn secondary small">Speichern</button>
+        </div>
+        <div id="optionInstallMeta" class="muted" style="font-size:12px;margin-top:8px;"></div>
+      </section>
+
+      <section class="card" style="margin-bottom:18px;">
+        <div class="label">Paket-Aktivierung</div>
+        <div style="display:grid;grid-template-columns:220px 1fr auto;gap:10px;align-items:end;margin-top:8px;">
+          <div class="field" style="margin:0;">
+            <label for="optionPackageStatus">Paketstatus</label>
+            <select id="optionPackageStatus" class="select">
+              <option value="active">Aktiv</option>
+              <option value="ignored">Deaktiviert / ignored</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0;">
+            <label for="optionIgnoreReason">Kommentar / Ignore-Grund</label>
+            <input id="optionIgnoreReason" class="input" placeholder="z. B. Veraltet, wird nicht mehr gepflegt" />
+          </div>
+          <button id="savePackageStateBtn" class="btn secondary small">Speichern</button>
+        </div>
+        <div id="optionPackageStateMeta" class="muted" style="font-size:12px;margin-top:8px;"></div>
+      </section>
+
+      <section class="card" style="margin-bottom:18px;">
+        <div class="label">Hand-Check</div>
+        <div style="display:grid;grid-template-columns:170px 170px 220px 1fr;gap:10px;align-items:end;margin-top:8px;">
+          <label class="checkbox-line" style="align-self:center;margin-top:20px;">
+            <input id="optionHandCheckEnabled" type="checkbox" />
+            <span>Hand-Check aktiv</span>
+          </label>
+          <div class="field" style="margin:0;">
+            <label for="optionHandCheckIntervalDays">Intervall in Tagen</label>
+            <input id="optionHandCheckIntervalDays" class="input" type="number" min="1" step="1" placeholder="30" />
+          </div>
+          <div class="field" style="margin:0;">
+            <label for="optionHandCheckTargetVersion">Version</label>
+            <input id="optionHandCheckTargetVersion" class="input" placeholder="optional, z. B. 1:5.4.920.0" />
+          </div>
+          <div class="field" style="margin:0;">
+            <label for="optionHandCheckNote">Anleitung / Notiz</label>
+            <textarea id="optionHandCheckNote" class="textarea" rows="3" placeholder="Beschreibe hier, was beim Hand-Check geprüft werden muss."></textarea>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+          <button id="saveHandCheckBtn" class="btn secondary small">Hand-Check speichern</button>
+          <button id="confirmHandCheckBtn" class="btn small hidden">Hand-Check erledigt</button>
+          <div id="optionHandCheckMeta" class="muted" style="font-size:12px;"></div>
+        </div>
+      </section>
+
+      <section class="card status-details-card">
+        <div class="label">Statusdetails</div>
+        <div id="optionStatusDetails" class="option-status-details">
+          <div class="muted" style="margin-top:8px;">Statusdetails werden geladen ...</div>
+        </div>
+      </section>
+
+      <h3 style="margin:0 0 14px;">Quellen</h3>
+      <div id="sourcesList"></div>
+
+      <hr style="border:0;border-top:1px solid var(--border);margin:22px 0;">
+
+      <h3 style="margin:0 0 14px;">Quelle hinzufügen</h3>
+
+      <div class="field">
+        <label>Typ</label>
+        <select id="newSourceType" class="select">
+          <option value="github_releases">github_releases</option>
+          <option value="vendor_release_notes">vendor_release_notes</option>
+          <option value="vendor_download_page">vendor_download_page</option>
+          <option value="vendor_changelog">vendor_changelog</option>
+          <option value="winget">winget</option>
+          <option value="custom_url">custom_url</option>
+          <option value="ai_search_fallback">ai_search_fallback</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>URL</label>
+        <input id="newSourceUrl" class="input" placeholder="https://..." />
+      </div>
+
+      <div style="display:grid;grid-template-columns:220px 1fr 220px 220px;gap:10px;">
+        <div class="field">
+          <label>Versions-Selector</label>
+          <select id="newSourceVersionSelector" class="select">
+            <option value="tag">tag</option>
+            <option value="release_name">release_name</option>
+            <option value="brave_chromium_composite">brave_chromium_composite</option>
+            <option value="html_regex">html_regex</option>
+            <option value="html_deep_regex">html_deep_regex</option>
+            <option value="download_url_regex">download_url_regex</option>
+            <option value="winget_id">winget_id</option>
+            <option value="winst-manager">winst-manager</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Versions-Pattern / Regex</label>
+          <input id="newSourceVersionPattern" class="input" placeholder="z. B. ([0-9]+\\.[0-9]+\\.[0-9]+)\\s+Release\\s+Notes" />
+        </div>
+
+        <div class="field">
+          <label>Versions-Template</label>
+          <input id="newSourceVersionTemplate" class="input" placeholder="z. B. $1.$2 oder bei Winget 1:$1" />
+        </div>
+
+        <div class="field">
+          <label>Version-Transform-Regex</label>
+          <input id="newSourceVersionTransformPattern" class="input" placeholder="z. B. ^(.+)$" />
+        </div>
+      </div>
+
+      <div id="newSourceSelectorHelp" class="source-help"></div>
+
+      <div class="field">
+        <label>Hinweis</label>
+        <textarea id="newSourceNote" class="textarea" placeholder="z. B. Nur stabile Releases, keine Beta/Nightly-Versionen. Für winst-manager: XPath, Regex-Gruppe und Download-Website eintragen."></textarea>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+        <div class="field">
+          <label>Priorität</label>
+          <input id="newSourcePriority" class="input" type="number" min="1" value="1" />
+        </div>
+        <div class="field">
+          <label>Zuverlässigkeit</label>
+          <input id="newSourceReliability" class="input" type="number" min="0" max="100" value="50" />
+        </div>
+        <div class="field">
+          <label>Intervall Stunden</label>
+          <input id="newSourceInterval" class="input" type="number" min="1" value="24" />
+        </div>
+        <div class="field">
+          <label>Aktiv</label>
+          <select id="newSourceEnabled" class="select">
+            <option value="true">Ja</option>
+            <option value="false">Nein</option>
+          </select>
+        </div>
+      </div>
+
+      <button id="addSourceBtn" class="btn">Quelle hinzufügen</button>
+      <div id="sourcesMessage" class="message"></div>
+    </div>
+
+    <div class="dialog-footer">
+      <span class="muted">Änderungen werden direkt gespeichert.</span>
+      <button id="closeSourcesBtn2" class="btn secondary">Fertig</button>
+    </div>
+  </dialog>
+
+  <dialog id="installImportDialog">
+    <div class="dialog-head">
+      <div>
+        <h2>Installationszahlen importieren</h2>
+        <p>Text einfügen. Es werden nur die ersten zwei Spalten verwendet: Paket-ID und Anzahl. Weitere Spalten werden ignoriert.</p>
+      </div>
+      <button id="closeInstallImportBtn" class="btn secondary small">Schließen</button>
+    </div>
+
+    <div class="dialog-body">
+      <section class="card" style="margin-bottom:18px;">
+        <div class="label">Import-Text</div>
+        <textarea id="installImportText" class="textarea" style="min-height:260px;margin-top:8px;" placeholder="activepython&#9;7.029&#9;160&#9;43&#10;activepython3&#9;77&#9;1&#9;77"></textarea>
+        <div class="source-help" style="margin-top:10px;margin-bottom:0;">
+          Beispiel: <code>python 65.229 919 70</code> wird als <code>package_id=python</code> und <code>installation_count=65229</code> importiert.
+        </div>
+      </section>
+
+      <section class="card" style="margin-bottom:18px;">
+        <div class="label">Vorschau</div>
+        <div id="installImportPreview" class="muted" style="margin-top:8px;line-height:1.5;">Noch keine Daten eingefügt.</div>
+      </section>
+
+      <div id="installImportMessage" class="message"></div>
+    </div>
+
+    <div class="dialog-footer">
+      <span class="muted">Nicht vorhandene Pakete werden automatisch ignoriert.</span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="saveInstallImportBtn" class="btn">Speichern</button>
+        <button id="closeInstallImportBtn2" class="btn secondary">Abbrechen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    const SUPABASE_URL = 'https://jgzuuanvrcmgbwtbnmrj.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnenV1YW52cmNtZ2J3dGJubXJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNTYzMDQsImV4cCI6MjA5NTkzMjMwNH0.OxXmh1tYlINRplNHCh3mvvrGBSH3qz7EYmOQUPRL9iQ';
+
+    const ALLOW_SIGNUP = false;
+
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let currentUser = null;
+    let currentRole = 'viewer';
+    let packages = [];
+    let sourcesByPackage = {};
+    let ticketLinksByPackage = {};
+    let optionChecks = [];
+    let sortKey = 'name';
+    let sortDir = 'asc';
+    let currentSourcesPackageId = null;
+    let appLoaded = false;
+    let lastLoadedUserId = null;
+    let loadAllPromise = null;
+    const syncPollTimers = new Map();
+
+    const $ = (id) => document.getElementById(id);
+
+    const els = {
+      loginView: $('loginView'),
+      appView: $('appView'),
+      alphabetNav: $('alphabetNav'),
+      loginEmail: $('loginEmail'),
+      loginPassword: $('loginPassword'),
+      loginBtn: $('loginBtn'),
+      signupBtn: $('signupBtn'),
+      loginMessage: $('loginMessage'),
+      logoutBtn: $('logoutBtn'),
+      packageChecksBtn: $('packageChecksBtn'),
+      userEmail: $('userEmail'),
+      userRole: $('userRole'),
+      adminCards: $('adminCards'),
+      packageTbody: $('packageTbody'),
+      searchInput: $('searchInput'),
+      statusFilter: $('statusFilter'),
+      packageStatusFilter: $('packageStatusFilter'),
+      reloadBtn: $('reloadBtn'),
+      openInstallImportBtn: $('openInstallImportBtn'),
+      selectionCount: $('selectionCount'),
+
+      statTotal: $('statTotal'),
+      statUpdates: $('statUpdates'),
+      statFailed: $('statFailed'),
+      statUncertain: $('statUncertain'),
+      statMissing: $('statMissing'),
+      statStale: $('statStale'),
+      statHandCheck: $('statHandCheck'),
+      statQueued: $('statQueued'),
+      statChecksToday: $('statChecksToday'),
+
+      sourcesDialog: $('sourcesDialog'),
+      sourcesTitle: $('sourcesTitle'),
+      sourcesSubtitle: $('sourcesSubtitle'),
+      sourcesList: $('sourcesList'),
+      closeSourcesBtn: $('closeSourcesBtn'),
+      closeSourcesBtn2: $('closeSourcesBtn2'),
+      newSourceType: $('newSourceType'),
+      newSourceUrl: $('newSourceUrl'),
+      newSourceVersionSelector: $('newSourceVersionSelector'),
+      newSourceVersionPattern: $('newSourceVersionPattern'),
+      newSourceVersionTemplate: $('newSourceVersionTemplate'),
+      newSourceVersionTransformPattern: $('newSourceVersionTransformPattern'),
+      newSourceSelectorHelp: $('newSourceSelectorHelp'),
+      newSourceNote: $('newSourceNote'),
+      newSourcePriority: $('newSourcePriority'),
+      newSourceReliability: $('newSourceReliability'),
+      newSourceInterval: $('newSourceInterval'),
+      newSourceEnabled: $('newSourceEnabled'),
+      addSourceBtn: $('addSourceBtn'),
+      sourcesMessage: $('sourcesMessage'),
+      optionInstallCount: $('optionInstallCount'),
+      optionInstallMeta: $('optionInstallMeta'),
+      saveOptionInstallBtn: $('saveOptionInstallBtn'),
+      optionPackageStatus: $('optionPackageStatus'),
+      optionIgnoreReason: $('optionIgnoreReason'),
+      savePackageStateBtn: $('savePackageStateBtn'),
+      optionHandCheckEnabled: $('optionHandCheckEnabled'),
+      optionHandCheckIntervalDays: $('optionHandCheckIntervalDays'),
+      optionHandCheckTargetVersion: $('optionHandCheckTargetVersion'),
+      optionHandCheckNote: $('optionHandCheckNote'),
+      optionHandCheckMeta: $('optionHandCheckMeta'),
+      saveHandCheckBtn: $('saveHandCheckBtn'),
+      confirmHandCheckBtn: $('confirmHandCheckBtn'),
+      optionPackageStateMeta: $('optionPackageStateMeta'),
+      optionStatusDetails: $('optionStatusDetails'),
+      installImportDialog: $('installImportDialog'),
+      installImportText: $('installImportText'),
+      installImportPreview: $('installImportPreview'),
+      installImportMessage: $('installImportMessage'),
+      closeInstallImportBtn: $('closeInstallImportBtn'),
+      closeInstallImportBtn2: $('closeInstallImportBtn2'),
+      saveInstallImportBtn: $('saveInstallImportBtn')
+    };
+
+    function canMaintain() {
+      return !!currentUser;
+    }
+
+    function canAdmin() {
+      return !!currentUser;
+    }
+
+    function setMessage(el, text, type = '') {
+      el.textContent = text || '';
+      el.className = 'message' + (type ? ` ${type}` : '');
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function formatDate(value) {
+      if (!value) return '-';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return '-';
+      return d.toLocaleString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function getEffectiveStatus(pkg) {
+      const raw = pkg?.check_status || 'not_checked';
+      const isIgnored = pkg?.ignored === true || pkg?.package_status === 'ignored';
+
+      if (isIgnored) return 'skipped';
+      if (raw === 'failed') return 'failed';
+      if (raw === 'queued') return 'queued';
+      if (raw === 'checking') return 'checking';
+      if (raw === 'update_available' || pkg?.update_available === true) return 'update_available';
+      if (raw === 'hand_check') return 'hand_check';
+
+      // Hand-Check-Wartezeit separat anzeigen, solange kein Update/Fehler/laufender Job vorliegt.
+      if (pkg?.hand_check_enabled === true) return 'hand_check_timer';
+
+      return raw;
+    }
+
+    function statusPill(status, updateAvailable) {
+      const s = status || 'not_checked';
+
+      if (s === 'failed') return `<span class="pill red">Fehler</span>`;
+      if (s === 'update_available' || updateAvailable) return `<span class="pill blue">Update</span>`;
+      if (s === 'hand_check') return `<span class="pill pink">Hand-Check</span>`;
+      if (s === 'up_to_date') return `<span class="pill green">Aktuell</span>`;
+      if (s === 'uncertain') return `<span class="pill orange">Unsicher</span>`;
+
+      if (s === 'queued') return `<span class="pill plain">Queued</span>`;
+      if (s === 'checking') return `<span class="pill plain">Checking</span>`;
+      if (s === 'hand_check_timer') return `<span class="pill plain">Hand-Check-Timer</span>`;
+      if (s === 'skipped') return `<span class="pill gray">Skipped</span>`;
+      if (s === 'stale') return `<span class="pill plain">Stale</span>`;
+
+      return `<span class="pill gray">Nicht geprüft</span>`;
+    }
+
+    function statusCell(pkg) {
+      const effectiveStatus = getEffectiveStatus(pkg);
+      const effectiveUpdate = effectiveStatus === 'update_available';
+      return statusPill(effectiveStatus, effectiveUpdate) + skippedReason(pkg, effectiveStatus);
+    }
+
+    function skippedReason(pkg, effectiveStatus = getEffectiveStatus(pkg)) {
+      if (effectiveStatus === 'hand_check' || effectiveStatus === 'hand_check_timer') {
+        let reason = '';
+        if (pkg?.hand_check_target_version) {
+          reason = `Warte auf lokale Version >= ${pkg.hand_check_target_version}`;
+        } else if (pkg?.check_status === 'hand_check') {
+          reason = pkg?.hand_check_note || pkg?.check_message || 'Hand-Check ist fällig.';
+        } else if (pkg?.hand_check_next_due_at) {
+          reason = `Nächster Hand-Check: ${formatDate(pkg.hand_check_next_due_at)}`;
+        } else {
+          reason = pkg?.hand_check_note || 'Hand-Check aktiv.';
+        }
+        return reason ? `<div class="status-reason">${escapeHtml(reason)}</div>` : '';
+      }
+
+      if ((pkg?.check_status !== 'skipped') && pkg?.package_status !== 'ignored' && pkg?.ignored !== true) return '';
+      const reason = pkg?.ignore_reason || pkg?.check_message || '';
+      return reason ? `<div class="status-reason">${escapeHtml(reason)}</div>` : '';
+    }
+
+    function isSyncPending(pkg) {
+      const pendingStatuses = new Set(['queued', 'running', 'checking']);
+      return pendingStatuses.has(String(pkg?.check_status || '')) || pendingStatuses.has(String(pkg?.local_sync_status || ''));
+    }
+
+    function jumpPill(type, score) {
+      const cleanType = type || 'unknown';
+      const cleanScore = Number(score || 0);
+
+      if (cleanScore >= 100) return `<span class="pill red">${escapeHtml(cleanType)} · ${cleanScore}</span>`;
+      if (cleanScore >= 10) return `<span class="pill orange">${escapeHtml(cleanType)} · ${cleanScore}</span>`;
+      if (cleanScore > 0) return `<span class="pill yellow">${escapeHtml(cleanType)} · ${cleanScore}</span>`;
+
+      return `<span class="pill gray">-</span>`;
+    }
+
+    async function init() {
+      els.signupBtn.classList.toggle('hidden', !ALLOW_SIGNUP);
+
+      els.loginBtn.addEventListener('click', login);
+      els.signupBtn.addEventListener('click', signup);
+      els.logoutBtn.addEventListener('click', logout);
+      els.packageChecksBtn.addEventListener('click', () => window.open('local-checks.html', '_blank', 'noopener'));
+      els.reloadBtn.addEventListener('click', () => loadAll({ force: true, preserveScroll: true }));
+      els.openInstallImportBtn.addEventListener('click', openInstallImportDialog);
+      els.closeInstallImportBtn.addEventListener('click', closeInstallImportDialog);
+      els.closeInstallImportBtn2.addEventListener('click', closeInstallImportDialog);
+      els.installImportText.addEventListener('input', renderInstallImportPreview);
+      els.saveInstallImportBtn.addEventListener('click', saveInstallImport);
+
+      els.searchInput.addEventListener('input', renderPackages);
+      els.statusFilter.addEventListener('change', renderPackages);
+      els.packageStatusFilter.addEventListener('change', renderPackages);
+
+      document.querySelectorAll('th.sortable').forEach((th) => {
+        th.addEventListener('click', () => {
+          const nextKey = th.dataset.sort;
+          if (sortKey === nextKey) {
+            sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            sortKey = nextKey;
+            sortDir = nextKey === 'name' ? 'asc' : 'desc';
+          }
+          renderPackages();
+        });
+      });
+
+      els.closeSourcesBtn.addEventListener('click', closeSourcesDialog);
+      els.closeSourcesBtn2.addEventListener('click', closeSourcesDialog);
+      els.sourcesDialog.addEventListener('close', unlockPageScrollIfNoDialogOpen);
+      els.installImportDialog.addEventListener('close', unlockPageScrollIfNoDialogOpen);
+      els.addSourceBtn.addEventListener('click', addSource);
+      els.saveOptionInstallBtn.addEventListener('click', () => {
+        if (!currentSourcesPackageId) return;
+        const count = Number(els.optionInstallCount.value || 0);
+        saveInstallationCount(currentSourcesPackageId, count, els.saveOptionInstallBtn);
+      });
+      els.savePackageStateBtn.addEventListener('click', () => {
+        if (!currentSourcesPackageId) return;
+        savePackageState(currentSourcesPackageId, els.savePackageStateBtn);
+      });
+      if (els.saveHandCheckBtn) {
+        els.saveHandCheckBtn.addEventListener('click', () => {
+          if (!currentSourcesPackageId) return;
+          saveHandCheckOptions(currentSourcesPackageId, els.saveHandCheckBtn);
+        });
+      }
+      if (els.confirmHandCheckBtn) {
+        els.confirmHandCheckBtn.addEventListener('click', () => {
+          if (!currentSourcesPackageId) return;
+          confirmHandCheckDone(currentSourcesPackageId, els.confirmHandCheckBtn);
+        });
+      }
+      els.optionPackageStatus.addEventListener('change', () => {
+        const isIgnored = els.optionPackageStatus.value === 'ignored';
+        els.optionIgnoreReason.placeholder = isIgnored
+          ? 'Grund für Deaktivierung eintragen'
+          : 'Optionaler Kommentar';
+      });
+      els.newSourceType.addEventListener('change', applyNewSourceDefaults);
+      els.newSourceVersionSelector.addEventListener('change', updateNewSourceSelectorHelp);
+
+      const { data } = await sb.auth.getSession();
+      if (data.session) {
+        currentUser = data.session.user;
+        await enterApp();
+      } else {
+        showLogin();
+      }
+
+      sb.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          const sameUserAlreadyLoaded = appLoaded && lastLoadedUserId === session.user.id && !els.appView.classList.contains('hidden');
+          currentUser = session.user;
+          if (!sameUserAlreadyLoaded && event !== 'TOKEN_REFRESHED') {
+            await enterApp();
+          }
+        } else if (event === 'SIGNED_OUT') {
+          currentUser = null;
+          currentRole = 'viewer';
+          appLoaded = false;
+          lastLoadedUserId = null;
+          showLogin();
+        }
+      });
+    }
+
+    function showLogin() {
+      els.loginView.classList.remove('hidden');
+      els.appView.classList.add('hidden');
+      if (els.alphabetNav) els.alphabetNav.classList.add('hidden');
+    }
+
+    async function enterApp() {
+      els.loginView.classList.add('hidden');
+      els.appView.classList.remove('hidden');
+
+      els.userEmail.textContent = currentUser?.email || '-';
+
+      const sameUserAlreadyLoaded = appLoaded && lastLoadedUserId === currentUser?.id && packages.length > 0;
+      if (sameUserAlreadyLoaded) {
+        renderPackagesPreserveScroll();
+        loadAdminStats();
+        return;
+      }
+
+      loadRole();
+      await loadAll({ force: true });
+      appLoaded = true;
+      lastLoadedUserId = currentUser?.id || null;
+    }
+
+    async function login() {
+      setMessage(els.loginMessage, '');
+
+      const email = els.loginEmail.value.trim();
+      const password = els.loginPassword.value;
+
+      if (!email || !password) {
+        setMessage(els.loginMessage, 'Bitte E-Mail und Passwort eingeben.', 'error');
+        return;
+      }
+
+      els.loginBtn.disabled = true;
+
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+
+      els.loginBtn.disabled = false;
+
+      if (error) {
+        setMessage(els.loginMessage, error.message, 'error');
+      }
+    }
+
+    async function signup() {
+      if (!ALLOW_SIGNUP) return;
+
+      setMessage(els.loginMessage, '');
+
+      const email = els.loginEmail.value.trim();
+      const password = els.loginPassword.value;
+
+      if (!email || !password) {
+        setMessage(els.loginMessage, 'Bitte E-Mail und Passwort eingeben.', 'error');
+        return;
+      }
+
+      const { error } = await sb.auth.signUp({ email, password });
+
+      if (error) {
+        setMessage(els.loginMessage, error.message, 'error');
+      } else {
+        setMessage(els.loginMessage, 'Registrierung erstellt. Prüfe ggf. deine E-Mails.', 'ok');
+      }
+    }
+
+    async function logout() {
+      await sb.auth.signOut();
+    }
+
+    function loadRole() {
+      // Kein Rollen-/Berechtigungssystem in der Website.
+      // Jeder eingeloggte Benutzer darf die Verwaltungsfunktionen verwenden.
+      currentRole = 'angemeldet';
+      if (els.userRole) els.userRole.textContent = 'angemeldet';
+      if (els.adminCards) els.adminCards.classList.remove('hidden');
+    }
+
+    async function loadAll(options = {}) {
+      const { force = false, preserveScroll = false } = options;
+      if (loadAllPromise && !force) return loadAllPromise;
+
+      loadAllPromise = (async () => {
+        const y = window.scrollY;
+        await loadPackages();
+        await loadSources();
+        await loadTicketLinks();
+        if (preserveScroll) {
+          renderPackagesPreserveScroll(y);
+        } else {
+          renderPackages();
+        }
+
+        await loadAdminStats();
+      })();
+
+      try {
+        await loadAllPromise;
+      } finally {
+        loadAllPromise = null;
+      }
+    }
+
+    async function fetchAllRows(tableName, selectColumns = '*', orderBuilder = null, pageSize = 1000) {
+      const allRows = [];
+      let from = 0;
+
+      while (true) {
+        let query = sb
+          .from(tableName)
+          .select(selectColumns)
+          .range(from, from + pageSize - 1);
+
+        if (orderBuilder) {
+          query = orderBuilder(query);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          throw error;
+        }
+
+        const rows = data || [];
+        allRows.push(...rows);
+
+        if (rows.length < pageSize) {
+          break;
+        }
+
+        from += pageSize;
+      }
+
+      return allRows;
+    }
+
+    async function loadPackages() {
+      els.packageTbody.innerHTML = `<tr><td colspan="9" class="empty">Lade Pakete ...</td></tr>`;
+
+      try {
+        packages = await fetchAllRows(
+          'packages',
+          '*',
+          (query) => query.order('name', { ascending: true })
+        );
+      } catch (error) {
+        packages = [];
+        els.packageTbody.innerHTML = `<tr><td colspan="9" class="empty">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
+      }
+    }
+
+    async function loadSources() {
+      try {
+        const data = await fetchAllRows(
+          'package_sources',
+          '*',
+          (query) => query
+            .order('priority', { ascending: true })
+            .order('reliability_score', { ascending: false })
+        );
+
+        sourcesByPackage = {};
+        for (const source of data || []) {
+          if (!sourcesByPackage[source.package_id]) sourcesByPackage[source.package_id] = [];
+          sourcesByPackage[source.package_id].push(source);
+        }
+      } catch (error) {
+        console.error(error);
+        sourcesByPackage = {};
+      }
+    }
+
+    async function loadTicketLinks() {
+      try {
+        const data = await fetchAllRows(
+          'redmine_ticket_links',
+          '*',
+          (query) => query.order('updated_at', { ascending: false })
+        );
+
+        ticketLinksByPackage = {};
+        for (const link of data || []) {
+          if (!link.package_id) continue;
+          ticketLinksByPackage[link.package_id] = link;
+        }
+      } catch (error) {
+        console.warn('Redmine-Ticket-Links konnten nicht geladen werden:', error);
+        ticketLinksByPackage = {};
+      }
+    }
+
+    function ticketButton(pkg) {
+      const link = ticketLinksByPackage[pkg.package_id];
+
+      if (!link || !link.ticket_id) {
+        return `<button class="btn secondary small" data-ticket="${escapeHtml(pkg.package_id)}" data-ticket-action="new" style="color:#d8922b;">Neues Ticket anlegen</button>`;
+      }
+
+      const ticketId = Number(link.ticket_id);
+      const status = link.ticket_status_name || 'Ticket';
+      const assignedFirstName = String(link.assigned_to_name || '').trim().split(/\s+/)[0] || '';
+      const isClosed = link.ticket_is_closed === true;
+      const buttonText = isClosed
+        ? `#${ticketId} ${status}`
+        : `#${ticketId} ${status}${assignedFirstName ? ' ' + assignedFirstName : ''}`;
+      const style = isClosed ? '' : ' style="color:#3fa66b;"';
+
+      return `<button class="btn secondary small" data-ticket="${escapeHtml(pkg.package_id)}" data-ticket-action="${isClosed ? 'closed' : 'open'}" data-ticket-id="${ticketId}"${style}>${escapeHtml(buttonText)}</button>`;
+    }
+
+    function setDashboardGlow(statEl, className) {
+      if (!statEl) return;
+      const card = statEl.closest('.card');
+      if (!card) return;
+      card.classList.remove('neon-green', 'neon-blue', 'neon-orange', 'neon-pink', 'neon-red');
+      const n = Number(String(statEl.textContent || '0').replace(/\./g, '').replace(/,/g, '.')) || 0;
+      if (n > 0 && className) card.classList.add(className);
+    }
+
+    function updateDashboardGlow() {
+      setDashboardGlow(els.statUpdates, 'neon-blue');
+      setDashboardGlow(els.statFailed, 'neon-red');
+      setDashboardGlow(els.statUncertain, 'neon-orange');
+      setDashboardGlow(els.statHandCheck, 'neon-pink');
+    }
+
+    async function loadAdminStats() {
+      if (els.adminCards) els.adminCards.classList.remove('hidden');
+      const { data, error } = await sb
+        .from('admin_dashboard_stats')
+        .select('*')
+        .single();
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      els.statTotal.textContent = data.packages_total ?? 0;
+      els.statUpdates.textContent = data.packages_with_updates ?? 0;
+      els.statFailed.textContent = data.packages_failed ?? 0;
+      els.statUncertain.textContent = data.packages_uncertain ?? 0;
+      els.statMissing.textContent = data.packages_missing ?? 0;
+      els.statStale.textContent = data.packages_stale ?? 0;
+      if (els.statHandCheck) els.statHandCheck.textContent = data.packages_hand_check ?? 0;
+      els.statQueued.textContent = data.jobs_queued ?? 0;
+      els.statChecksToday.textContent = data.checks_today ?? 0;
+      updateDashboardGlow();
+    }
+
+    function getPackageAlpha(pkg) {
+      const value = String(pkg?.name || pkg?.package_id || '').trim();
+      if (!value) return '#';
+
+      const first = value.charAt(0).toUpperCase();
+      const normalized = first
+        .replace('Ä', 'A')
+        .replace('Ö', 'O')
+        .replace('Ü', 'U');
+
+      return /^[A-Z]$/.test(normalized) ? normalized : '#';
+    }
+
+    function renderAlphabetNav(rows) {
+      if (!els.alphabetNav) return;
+
+      const letters = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
+      const available = new Set(rows.map(getPackageAlpha));
+
+      els.alphabetNav.classList.toggle('hidden', els.appView?.classList.contains('hidden') ?? true);
+      els.alphabetNav.innerHTML = letters.map((letter) => `
+        <button type="button" data-alpha-jump="${letter}" ${available.has(letter) ? '' : 'disabled'} title="Zu ${letter} springen">${letter}</button>
+      `).join('');
+
+      els.alphabetNav.querySelectorAll('[data-alpha-jump]').forEach((btn) => {
+        btn.addEventListener('click', () => jumpToAlpha(btn.dataset.alphaJump));
+      });
+    }
+
+    function jumpToAlpha(letter) {
+      const row = Array.from(els.packageTbody.querySelectorAll('tr[data-alpha]'))
+        .find((tr) => tr.dataset.alpha === letter);
+
+      if (!row) return;
+
+      const y = row.getBoundingClientRect().top + window.scrollY - 92;
+      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+
+      if (!els.alphabetNav) return;
+      els.alphabetNav.querySelectorAll('button').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.alphaJump === letter);
+      });
+    }
+
+    function renderPackagesPreserveScroll(forcedY = null) {
+      const y = Number.isFinite(forcedY) ? forcedY : window.scrollY;
+      const shellBefore = document.querySelector('.table-shell');
+      const tableScrollLeft = shellBefore?.scrollLeft || 0;
+      renderPackages();
+
+      const restore = () => {
+        window.scrollTo({ top: y, behavior: 'auto' });
+        const shell = document.querySelector('.table-shell');
+        if (shell) shell.scrollLeft = tableScrollLeft;
+      };
+
+      requestAnimationFrame(restore);
+      setTimeout(restore, 30);
+      setTimeout(restore, 120);
+    }
+
+    function patchPackageLocal(packageId, patch) {
+      const index = packages.findIndex((pkg) => pkg.package_id === packageId);
+      if (index === -1) return;
+      packages[index] = { ...packages[index], ...patch };
+    }
+
+    function patchPackagesLocal(rows) {
+      const byId = new Map(rows.map((row) => [row.package_id, row]));
+      packages = packages.map((pkg) => byId.has(pkg.package_id) ? { ...pkg, ...byId.get(pkg.package_id) } : pkg);
+    }
+
+    function getFilteredPackages() {
+      const q = els.searchInput.value.trim().toLowerCase();
+      const status = els.statusFilter.value;
+      const packageStatus = els.packageStatusFilter.value;
+
+      let rows = [...packages];
+
+      if (status) {
+        rows = rows.filter((p) => {
+          const effectiveStatus = getEffectiveStatus(p);
+          if (status === 'update_available') return effectiveStatus === 'update_available' && !isSyncPending(p);
+          if (status === 'queued') return effectiveStatus === 'queued' || p.local_sync_status === 'queued';
+          if (status === 'checking') return effectiveStatus === 'checking' || p.local_sync_status === 'running' || p.local_sync_status === 'checking';
+          return effectiveStatus === status;
+        });
+      }
+
+      if (packageStatus) {
+        rows = rows.filter((p) => p.package_status === packageStatus);
+      }
+
+      if (q) {
+        rows = rows.filter((p) => {
+          const src = sourcesByPackage[p.package_id] || [];
+          const sourceText = src.map((s) => `${s.source_type} ${s.source_url} ${s.version_selector || ''} ${s.version_pattern || ''} ${s.version_template || ''} ${s.version_transform_pattern || ''} ${s.source_note || ''}`).join(' ');
+
+          const haystack = [
+            p.name,
+            p.package_id,
+            p.local_version,
+            p.local_dev2_version,
+            p.git_version,
+            p.git_last_package_update,
+            p.online_version,
+            p.check_status,
+            p.check_message,
+            p.package_status,
+            p.category,
+            p.source_path,
+            sourceText
+          ].join(' ').toLowerCase();
+
+          return haystack.includes(q);
+        });
+      }
+
+      rows.sort((a, b) => {
+        const av = a[sortKey];
+        const bv = b[sortKey];
+
+        let result = 0;
+
+        if (sortKey.includes('date') || sortKey.endsWith('_at') || sortKey === 'last_checked' || sortKey === 'last_seen_at' || sortKey === 'git_last_package_update') {
+          result = new Date(av || 0).getTime() - new Date(bv || 0).getTime();
+        } else if (typeof av === 'number' || typeof bv === 'number') {
+          result = Number(av || 0) - Number(bv || 0);
+        } else {
+          result = String(av || '').localeCompare(String(bv || ''), 'de', { numeric: true, sensitivity: 'base' });
+        }
+
+        return sortDir === 'asc' ? result : -result;
+      });
+
+      return rows;
+    }
+
+    function renderPackages() {
+      const rows = getFilteredPackages();
+
+      if (els.selectionCount) {
+        const total = packages.length;
+        els.selectionCount.textContent = `${rows.length.toLocaleString('de-DE')} von ${total.toLocaleString('de-DE')} Paketen in der aktuellen Auswahl`;
+      }
+
+      if (!rows.length) {
+        renderAlphabetNav(rows);
+        els.packageTbody.innerHTML = `<tr><td colspan="9" class="empty">Keine Pakete gefunden.</td></tr>`;
+        return;
+      }
+
+      renderAlphabetNav(rows);
+
+      const seenAlpha = new Set();
+      els.packageTbody.innerHTML = rows.map((p) => {
+        const alpha = getPackageAlpha(p);
+        const isFirstAlpha = !seenAlpha.has(alpha);
+        seenAlpha.add(alpha);
+        const installCell = `
+          <strong>${Number(p.installation_count || 0)}</strong>
+          <div class="muted" style="font-size:12px;margin-top:4px;">${escapeHtml(p.installation_count_source || 'manual')}</div>
+        `;
+
+        const syncPending = isSyncPending(p);
+        const syncButtonText = syncPending ? (p.check_status === 'checking' || p.local_sync_status === 'running' ? 'Läuft ...' : 'Queued') : 'Sync';
+        const syncButton = `<button class="btn small" data-sync="${escapeHtml(p.package_id)}" ${syncPending ? 'disabled' : ''}>${syncButtonText}</button>`;
+
+        const actions = canMaintain()
+          ? `
+            <div class="row-actions">
+              ${syncButton}
+              ${ticketButton(p)}
+              <button class="btn secondary small" data-sources="${escapeHtml(p.package_id)}">Optionen</button>
+            </div>
+          `
+          : `
+            <div class="row-actions">
+              ${syncButton}
+              ${ticketButton(p)}
+              <button class="btn secondary small" data-sources="${escapeHtml(p.package_id)}">Optionen</button>
+            </div>
+          `;
+
+        return `
+          <tr data-alpha="${alpha}" class="${isFirstAlpha ? 'alpha-anchor' : ''}">
+            <td>
+              <div class="pkg-name">${escapeHtml(p.name || '-')}</div>
+              <div class="pkg-id">${escapeHtml(p.package_id)}</div>
+            </td>
+            <td>${escapeHtml(p.local_dev2_version || p.local_version || '-')}</td>
+            <td>${escapeHtml(p.git_version || '-')}</td>
+            <td>
+              <strong>${escapeHtml(p.manual_override ? p.manual_online_version : (p.online_version || '-'))}</strong>
+              ${p.manual_override ? '<div class="muted" style="font-size:12px;">manuell überschrieben</div>' : ''}
+            </td>
+            <td>${statusCell(p)}</td>
+            <td>${installCell}</td>
+            <td>${formatDate(p.git_last_package_update)}</td>
+            <td>${formatDate(p.last_checked)}</td>
+            <td>${actions}</td>
+          </tr>
+        `;
+      }).join('');
+
+      bindRowButtons();
+    }
+
+    function bindRowButtons() {
+      document.querySelectorAll('[data-sync]').forEach((btn) => {
+        btn.addEventListener('click', () => requestSync(btn.dataset.sync, btn));
+      });
+
+      document.querySelectorAll('[data-sources]').forEach((btn) => {
+        btn.addEventListener('click', () => openSourcesDialog(btn.dataset.sources));
+      });
+
+      document.querySelectorAll('[data-ticket]').forEach((btn) => {
+        bindTicketButton(btn);
+      });
+
+    }
+
+    function bindTicketButton(btn) {
+      let holdTimer = null;
+      let longPressDone = false;
+
+      const clearHoldTimer = () => {
+        if (holdTimer) clearTimeout(holdTimer);
+        holdTimer = null;
+      };
+
+      const startHold = () => {
+        longPressDone = false;
+        clearHoldTimer();
+        if (btn.dataset.ticketAction !== 'closed') return;
+        holdTimer = setTimeout(async () => {
+          longPressDone = true;
+          await createCopiedRedmineTicket(btn.dataset.ticket, btn);
+        }, 1000);
+      };
+
+      btn.addEventListener('mousedown', startHold);
+      btn.addEventListener('touchstart', startHold, { passive: true });
+      btn.addEventListener('mouseup', clearHoldTimer);
+      btn.addEventListener('mouseleave', clearHoldTimer);
+      btn.addEventListener('touchend', clearHoldTimer);
+      btn.addEventListener('touchcancel', clearHoldTimer);
+
+      btn.addEventListener('click', async (event) => {
+        if (longPressDone) {
+          event.preventDefault();
+          longPressDone = false;
+          return;
+        }
+        clearHoldTimer();
+        await handleTicketButtonClick(btn.dataset.ticket, btn);
+      });
+    }
+
+    async function handleTicketButtonClick(packageId, btn) {
+      const action = btn.dataset.ticketAction || 'new';
+      const ticketId = btn.dataset.ticketId;
+
+      if (action === 'open' || action === 'closed') {
+        if (ticketId) window.open(`https://redmine.iserv.eu/issues/${ticketId}`, '_blank', 'noopener');
+        return;
+      }
+
+      const entered = prompt('Bitte Ticket-ID eintragen:');
+      if (!entered) return;
+
+      const cleanTicketId = String(entered).replace(/[^0-9]/g, '');
+      if (!cleanTicketId) {
+        alert('Keine gültige Ticket-ID eingetragen.');
+        return;
+      }
+
+      await checkAndSaveRedmineTicket(packageId, cleanTicketId, btn);
+    }
+
+    async function checkAndSaveRedmineTicket(packageId, ticketId, btn) {
+      const oldText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Prüfe ...';
+
+      try {
+        const { data, error } = await sb.functions.invoke('redmine-ticket-check', {
+          body: { package_id: packageId, ticket_id: Number(ticketId) }
+        });
+
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+
+        if (data?.ticket) {
+          ticketLinksByPackage[packageId] = data.ticket;
+        }
+
+        renderPackagesPreserveScroll();
+      } catch (error) {
+        alert(`Ticket konnte nicht geprüft/gespeichert werden: ${error.message || error}`);
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
+    }
+
+    async function createCopiedRedmineTicket(packageId, btn) {
+      if (!confirm('Geschlossenes Ticket kopieren und ein neues Redmine-Ticket anlegen?')) return;
+
+      const oldText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Lege an ...';
+
+      try {
+        const { data, error } = await sb.functions.invoke('redmine-ticket-create-copy', {
+          body: { package_id: packageId }
+        });
+
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+
+        if (data?.ticket) {
+          ticketLinksByPackage[packageId] = data.ticket;
+        }
+
+        renderPackagesPreserveScroll();
+        if (data?.ticket_url) window.open(data.ticket_url, '_blank', 'noopener');
+      } catch (error) {
+        alert(`Ticket konnte nicht angelegt werden: ${error.message || error}`);
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
+    }
+
+async function requestSync(packageId, btn) {
+  if (!currentUser) {
+    alert('Bitte zuerst einloggen.');
+    return;
+  }
+
+  const pkg = packages.find((p) => p.package_id === packageId);
+  if (!pkg) return;
+
+  const originalText = btn?.textContent || 'Sync';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Queued ...';
+  }
+
+  const now = new Date().toISOString();
+  const deadline = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+  // Sofort lokal auf queued setzen, damit Status und Button direkt korrekt reagieren,
+  // auch wenn das Paket vorher noch auf Update stand.
+  patchPackageLocal(packageId, {
+    check_status: 'queued',
+    check_message: 'local_check wurde über die Website in die Queue gelegt.',
+    local_sync_status: 'queued',
+    local_sync_message: 'local_check wurde über die Website in die Queue gelegt.',
+    local_sync_requested_at: now,
+    local_sync_deadline_at: deadline,
+    updated_at: now
+  });
+  renderPackagesPreserveScroll();
+
+  let createdOrAlreadyQueued = false;
+  let lastError = null;
+
+  try {
+    const { data: existingJob, error: existingError } = await sb
+      .from('check_jobs')
+      .select('id,status,job_type')
+      .eq('package_id', packageId)
+      .in('status', ['queued', 'running'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingError && existingJob) {
+      createdOrAlreadyQueued = true;
+    }
+  } catch (err) {
+    console.warn('Aktive Jobs konnten nicht geprüft werden:', err);
+  }
+
+  if (!createdOrAlreadyQueued) {
+    const jobPayload = {
+      package_id: packageId,
+      requested_by: currentUser?.id || null,
+      job_type: 'local_check',
+      status: 'queued',
+      priority: 1,
+      message: 'local_check wurde über die Website in die Queue gelegt.',
+      created_at: now,
+      deadline_at: deadline
+    };
+
+    const { error: insertError } = await sb
+      .from('check_jobs')
+      .insert(jobPayload);
+
+    if (insertError) {
+      lastError = insertError;
+      console.warn('Direktes Erstellen des local_check Jobs fehlgeschlagen, versuche RPC-Fallback:', insertError);
+
+      const { error: rpcError } = await sb.rpc('request_package_check', {
+        target_package_id: packageId
+      });
+
+      if (rpcError) {
+        lastError = rpcError;
+      } else {
+        createdOrAlreadyQueued = true;
+      }
+    } else {
+      createdOrAlreadyQueued = true;
+    }
+  }
+
+  if (!createdOrAlreadyQueued) {
+    alert(`Fehler beim Sync-Job: ${lastError?.message || 'Job konnte nicht angelegt werden.'}`);
+    await refreshSinglePackage(packageId);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+    return;
+  }
+
+  startSyncPoll(packageId);
+  loadAdminStats();
+}
+
+async function refreshSinglePackage(packageId, preserveScroll = true) {
+  const y = window.scrollY;
+  const { data, error } = await sb
+    .from('packages')
+    .select('*')
+    .eq('package_id', packageId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(`Paket ${packageId} konnte nicht aktualisiert werden:`, error);
+    return null;
+  }
+
+  if (data) {
+    patchPackageLocal(packageId, data);
+    if (preserveScroll) {
+      renderPackagesPreserveScroll(y);
+    } else {
+      renderPackages();
+    }
+  }
+
+  return data;
+}
+
+async function hasActiveSyncJob(packageId) {
+  const { data, error } = await sb
+    .from('check_jobs')
+    .select('id,status,job_type')
+    .eq('package_id', packageId)
+    .in('status', ['queued', 'running'])
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.warn(`Aktiver Sync-Job für ${packageId} konnte nicht geprüft werden:`, error);
+    return null;
+  }
+
+  return Array.isArray(data) && data.length > 0;
+}
+
+function startSyncPoll(packageId) {
+  if (syncPollTimers.has(packageId)) {
+    clearInterval(syncPollTimers.get(packageId));
+    syncPollTimers.delete(packageId);
+  }
+
+  const poll = async () => {
+    const pkg = await refreshSinglePackage(packageId);
+    const activeJob = await hasActiveSyncJob(packageId);
+    const stillPendingByPackage = isSyncPending(pkg || packages.find((p) => p.package_id === packageId));
+
+    if (activeJob === false && !stillPendingByPackage) {
+      clearInterval(syncPollTimers.get(packageId));
+      syncPollTimers.delete(packageId);
+      await loadAdminStats();
+    }
+  };
+
+  const timer = setInterval(poll, 5000);
+  syncPollTimers.set(packageId, timer);
+
+  // Erste Aktualisierung etwas verzögert, damit der local-runner den Job bereits übernehmen kann.
+  setTimeout(poll, 2500);
+}
+
+
+    function lockPageScroll() {
+      document.body.classList.add('modal-open');
+    }
+
+    function unlockPageScrollIfNoDialogOpen() {
+      const hasOpenDialog = Array.from(document.querySelectorAll('dialog')).some((dialog) => dialog.open);
+      if (!hasOpenDialog) document.body.classList.remove('modal-open');
+    }
+
+    function openModalDialog(dialog) {
+      lockPageScroll();
+      dialog.showModal();
+    }
+
+    function closeModalDialog(dialog) {
+      dialog.close();
+      requestAnimationFrame(unlockPageScrollIfNoDialogOpen);
+    }
+
+    function openInstallImportDialog() {
+      if (!canMaintain()) return;
+      els.installImportText.value = '';
+      setMessage(els.installImportMessage, '');
+      renderInstallImportPreview();
+      openModalDialog(els.installImportDialog);
+      setTimeout(() => els.installImportText.focus(), 100);
+    }
+
+    function closeInstallImportDialog() {
+      closeModalDialog(els.installImportDialog);
+    }
+
+    function parseInstallCountValue(value) {
+      const raw = String(value || '').trim();
+      if (!raw) return null;
+
+      // Die Importdateien nutzen den Punkt als Tausendertrennzeichen: 65.229 => 65229.
+      const normalized = raw
+        .replace(/\./g, '')
+        .replace(/\s/g, '')
+        .replace(/,.*/, '');
+
+      if (!/^\d+$/.test(normalized)) return null;
+      return Number(normalized);
+    }
+
+    function parseInstallImportText() {
+      const text = els.installImportText.value || '';
+      const lines = text.split(/\r?\n/);
+      const parsed = [];
+      const invalid = [];
+      const duplicateMap = new Map();
+
+      lines.forEach((line, index) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        const parts = trimmed.split(/\s+/);
+        const packageId = parts[0]?.trim();
+        const count = parseInstallCountValue(parts[1]);
+
+        if (!packageId || count === null || !Number.isSafeInteger(count) || count < 0) {
+          invalid.push({ line: index + 1, text: line });
+          return;
+        }
+
+        // Falls ein Paket mehrfach vorkommt, gewinnt der letzte Wert aus der Einfügeliste.
+        duplicateMap.set(packageId, {
+          package_id: packageId,
+          installation_count: count,
+          source_line: index + 1
+        });
+      });
+
+      parsed.push(...duplicateMap.values());
+      return { parsed, invalid, inputLineCount: lines.filter((line) => line.trim()).length };
+    }
+
+    function renderInstallImportPreview() {
+      const { parsed, invalid, inputLineCount } = parseInstallImportText();
+      const examples = parsed.slice(0, 6)
+        .map((row) => `${escapeHtml(row.package_id)} = ${Number(row.installation_count).toLocaleString('de-DE')}`)
+        .join('<br>');
+
+      els.installImportPreview.innerHTML = `
+        Eingefügte Datenzeilen: <strong>${inputLineCount}</strong><br>
+        Gültige eindeutige Paket-IDs: <strong>${parsed.length}</strong><br>
+        Ungültige Zeilen: <strong>${invalid.length}</strong>
+        ${examples ? `<hr style="border:0;border-top:1px solid var(--border);margin:10px 0;">${examples}` : ''}
+      `;
+    }
+
+    async function fetchExistingPackageIds(packageIds) {
+      const existing = new Set();
+      const chunkSize = 500;
+
+      for (let i = 0; i < packageIds.length; i += chunkSize) {
+        const chunk = packageIds.slice(i, i + chunkSize);
+        const { data, error } = await sb
+          .from('packages')
+          .select('package_id')
+          .in('package_id', chunk);
+
+        if (error) throw error;
+        for (const row of data || []) existing.add(row.package_id);
+      }
+
+      return existing;
+    }
+
+    async function saveInstallImport() {
+      if (!canMaintain()) return;
+
+      const { parsed, invalid } = parseInstallImportText();
+      if (!parsed.length) {
+        setMessage(els.installImportMessage, 'Keine gültigen Importzeilen gefunden.', 'error');
+        return;
+      }
+
+      const confirmText = `${parsed.length} eindeutige Paketwerte importieren?\n\nNicht vorhandene Paket-IDs werden ignoriert.`;
+      if (!confirm(confirmText)) return;
+
+      els.saveInstallImportBtn.disabled = true;
+      els.saveInstallImportBtn.textContent = 'Speichere ...';
+      setMessage(els.installImportMessage, 'Prüfe vorhandene Pakete ...');
+
+      try {
+        const existing = await fetchExistingPackageIds(parsed.map((row) => row.package_id));
+        const rowsToUpdate = parsed.filter((row) => existing.has(row.package_id));
+        const ignoredRows = parsed.filter((row) => !existing.has(row.package_id));
+
+        let updated = 0;
+        let failed = 0;
+        const failedRows = [];
+        const concurrency = 10;
+        let cursor = 0;
+
+        async function worker() {
+          while (cursor < rowsToUpdate.length) {
+            const row = rowsToUpdate[cursor++];
+            const { error } = await sb
+              .from('packages')
+              .update({
+                installation_count: row.installation_count,
+                installation_count_updated_at: new Date().toISOString(),
+                installation_count_source: 'manual',
+                updated_at: new Date().toISOString()
+              })
+              .eq('package_id', row.package_id);
+
+            if (error) {
+              failed += 1;
+              failedRows.push(`${row.package_id}: ${error.message}`);
+            } else {
+              updated += 1;
+            }
+
+            if ((updated + failed) % 25 === 0 || updated + failed === rowsToUpdate.length) {
+              setMessage(
+                els.installImportMessage,
+                `Speichere ... ${updated + failed}/${rowsToUpdate.length} verarbeitet.`
+              );
+            }
+          }
+        }
+
+        await Promise.all(Array.from({ length: Math.min(concurrency, rowsToUpdate.length) }, () => worker()));
+
+        patchPackagesLocal(rowsToUpdate.map((row) => ({
+          package_id: row.package_id,
+          installation_count: row.installation_count,
+          installation_count_source: 'manual',
+          installation_count_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })));
+        renderPackagesPreserveScroll();
+        loadAdminStats();
+
+        const ignoredPreview = ignoredRows.slice(0, 20).map((row) => row.package_id).join(', ');
+        const failedPreview = failedRows.slice(0, 10).join('\n');
+
+        setMessage(
+          els.installImportMessage,
+          [
+            `Import abgeschlossen.`,
+            `Aktualisiert: ${updated}`,
+            `Ignoriert, weil nicht vorhanden: ${ignoredRows.length}${ignoredPreview ? ` (${ignoredPreview}${ignoredRows.length > 20 ? ', ...' : ''})` : ''}`,
+            `Ungültige Zeilen: ${invalid.length}`,
+            failed ? `Fehler: ${failed}\n${failedPreview}` : ''
+          ].filter(Boolean).join('\n'),
+          failed ? 'error' : 'ok'
+        );
+      } catch (error) {
+        setMessage(els.installImportMessage, `Fehler beim Import: ${error.message}`, 'error');
+      } finally {
+        els.saveInstallImportBtn.disabled = false;
+        els.saveInstallImportBtn.textContent = 'Speichern';
+      }
+    }
+
+    async function saveInstallationCount(packageId, count, btn) {
+      if (!canMaintain()) return;
+
+      if (!Number.isInteger(count) || count < 0) {
+        alert('Bitte eine gültige Installationsanzahl eingeben.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Speichere ...';
+
+      const now = new Date().toISOString();
+      const { data: updatedRows, error } = await sb
+        .from('packages')
+        .update({
+          installation_count: count,
+          installation_count_source: 'manual',
+          installation_count_updated_at: now,
+          updated_at: now
+        })
+        .eq('package_id', packageId)
+        .select('package_id, installation_count, installation_count_source, installation_count_updated_at, updated_at');
+
+      btn.disabled = false;
+      btn.textContent = 'Speichern';
+
+      if (error) {
+        alert(`Fehler beim Speichern: ${error.message}`);
+        return;
+      }
+
+      const updatedPackage = Array.isArray(updatedRows) ? updatedRows[0] : null;
+      if (!updatedPackage) {
+        alert('Installationsanzahl konnte nicht gespeichert werden: Es wurde kein Paket aktualisiert. Bitte RLS/Policies prüfen.');
+        return;
+      }
+
+      patchPackageLocal(packageId, updatedPackage);
+      renderPackagesPreserveScroll();
+
+      if (currentSourcesPackageId === packageId && els.sourcesDialog.open) {
+        renderOptionsInstallation();
+        renderPackageState();
+        renderHandCheckOptions();
+        renderOptionStatusDetails();
+      }
+      loadAdminStats();
+    }
+
+    function openSourcesDialog(packageId) {
+      currentSourcesPackageId = packageId;
+
+      const pkg = packages.find((p) => p.package_id === packageId);
+      els.sourcesTitle.textContent = `Optionen: ${pkg?.name || packageId}`;
+      els.sourcesSubtitle.textContent = `${packageId} · Quellen, Regex und Installationsanzahl bearbeiten`;
+
+      setMessage(els.sourcesMessage, '');
+      clearNewSourceForm();
+      renderOptionsInstallation();
+      renderPackageState();
+      renderHandCheckOptions();
+      optionChecks = [];
+      renderOptionStatusDetails();
+      renderSourcesDialog();
+
+      openModalDialog(els.sourcesDialog);
+      loadOptionChecks(packageId);
+    }
+
+    function closeSourcesDialog() {
+      closeModalDialog(els.sourcesDialog);
+      currentSourcesPackageId = null;
+    }
+
+    function renderOptionsInstallation() {
+      const pkg = packages.find((p) => p.package_id === currentSourcesPackageId);
+      if (!pkg) return;
+
+      els.optionInstallCount.value = Number(pkg.installation_count || 0);
+      els.optionInstallMeta.textContent = `${pkg.installation_count_source || 'manual'} · ${formatDate(pkg.installation_count_updated_at)}`;
+    }
+
+    function renderPackageState() {
+      const pkg = packages.find((p) => p.package_id === currentSourcesPackageId);
+      if (!pkg) return;
+
+      const isIgnored = pkg.ignored === true || pkg.package_status === 'ignored';
+
+      els.optionPackageStatus.value = isIgnored ? 'ignored' : 'active';
+      els.optionIgnoreReason.value = pkg.ignore_reason || '';
+      els.optionIgnoreReason.placeholder = isIgnored
+        ? 'Grund für Deaktivierung eintragen'
+        : 'Optionaler Kommentar';
+
+      const statusText = isIgnored
+        ? 'Dieses Paket ist deaktiviert/ignored und sollte nicht mehr automatisch geprüft werden.'
+        : 'Dieses Paket ist aktiv und kann geprüft werden.';
+
+      els.optionPackageStateMeta.innerHTML = `
+        ${statusPill(isIgnored ? 'skipped' : getEffectiveStatus(pkg), getEffectiveStatus(pkg) === 'update_available')}
+        <span style="margin-left:8px;">${escapeHtml(statusText)}</span>
+        ${pkg.ignore_reason ? `<div style="margin-top:6px;">Ignore-Grund: ${escapeHtml(pkg.ignore_reason)}</div>` : ''}
+      `;
+    }
+
+    function renderHandCheckOptions() {
+      const pkg = packages.find((p) => p.package_id === currentSourcesPackageId);
+      if (!pkg) return;
+
+      if (els.optionHandCheckEnabled) els.optionHandCheckEnabled.checked = pkg.hand_check_enabled === true;
+      if (els.optionHandCheckIntervalDays) els.optionHandCheckIntervalDays.value = pkg.hand_check_interval_days || 30;
+      if (els.optionHandCheckTargetVersion) els.optionHandCheckTargetVersion.value = pkg.hand_check_target_version || '';
+      if (els.optionHandCheckNote) els.optionHandCheckNote.value = pkg.hand_check_note || '';
+
+      const enabled = pkg.hand_check_enabled === true;
+      const nextDue = formatDate(pkg.hand_check_next_due_at);
+      const lastDone = formatDate(pkg.hand_check_last_done_at);
+      const localVersion = getLocalCompareVersion(pkg) || '-';
+
+      if (els.confirmHandCheckBtn) {
+        els.confirmHandCheckBtn.classList.toggle('hidden', !enabled);
+      }
+
+      if (els.optionHandCheckMeta) {
+        if (!enabled) {
+          els.optionHandCheckMeta.innerHTML = 'Hand-Check ist für dieses Paket deaktiviert.';
+        } else if (pkg.hand_check_target_version) {
+          els.optionHandCheckMeta.innerHTML = `Aktiv · Zielversion: ${escapeHtml(pkg.hand_check_target_version)} · lokale Version: ${escapeHtml(localVersion)} · tägliche Prüfung aktiv`;
+        } else {
+          els.optionHandCheckMeta.innerHTML = `Aktiv · nächster Check: ${escapeHtml(nextDue || '-')} · zuletzt erledigt: ${escapeHtml(lastDone || '-')} · lokale Version: ${escapeHtml(localVersion)}`;
+        }
+      }
+    }
+
+    function computeNextHandCheckDate(intervalDays) {
+      const days = Math.max(1, Number(intervalDays || 30));
+      return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    }
+
+    function extractVersionNumbersClient(version) {
+      const matches = String(version || '').match(/\d+/g);
+      return matches ? matches.map((part) => Number(part)) : [];
+    }
+
+    function compareVersionsClient(leftVersion, rightVersion) {
+      const left = extractVersionNumbersClient(leftVersion);
+      const right = extractVersionNumbersClient(rightVersion);
+      if (!left.length || !right.length) return null;
+
+      const max = Math.max(left.length, right.length);
+      for (let i = 0; i < max; i++) {
+        const l = left[i] || 0;
+        const r = right[i] || 0;
+        if (l > r) return 1;
+        if (l < r) return -1;
+      }
+      return 0;
+    }
+
+    function getLocalCompareVersion(pkg) {
+      return pkg?.local_dev2_version || pkg?.local_version || pkg?.git_version || null;
+    }
+
+    async function saveHandCheckOptions(packageId, btn) {
+      if (!canMaintain() || !packageId) return;
+
+      const enabled = els.optionHandCheckEnabled?.checked === true;
+      const intervalDays = Math.max(1, Number.parseInt(els.optionHandCheckIntervalDays?.value || '30', 10));
+      const note = els.optionHandCheckNote?.value.trim() || null;
+      const pkg = packages.find((p) => p.package_id === packageId);
+
+      if (enabled && !note) {
+        alert('Bitte eine Anleitung / Notiz für den Hand-Check eintragen.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Speichere ...';
+
+      const payload = enabled
+        ? {
+            hand_check_enabled: true,
+            hand_check_note: note,
+            hand_check_interval_days: intervalDays,
+            hand_check_next_due_at: pkg?.hand_check_next_due_at || computeNextHandCheckDate(intervalDays),
+            updated_at: new Date().toISOString()
+          }
+        : {
+            hand_check_enabled: false,
+            hand_check_note: note,
+            hand_check_interval_days: intervalDays,
+            hand_check_next_due_at: null,
+            hand_check_target_version: null,
+            hand_check_target_set_at: null,
+            updated_at: new Date().toISOString()
+          };
+
+      const { data: updatedRows, error } = await sb
+        .from('packages')
+        .update(payload)
+        .eq('package_id', packageId)
+        .select('*');
+
+      btn.disabled = false;
+      btn.textContent = 'Hand-Check speichern';
+
+      if (error) {
+        alert(`Fehler beim Speichern des Hand-Checks: ${error.message}`);
+        return;
+      }
+
+      const updatedPackage = Array.isArray(updatedRows) ? updatedRows[0] : null;
+      if (!updatedPackage) {
+        alert('Hand-Check konnte nicht gespeichert werden: Es wurde kein Paket aktualisiert. Bitte Rechte/RLS prüfen.');
+        return;
+      }
+
+      patchPackageLocal(packageId, updatedPackage);
+      renderPackagesPreserveScroll();
+      renderHandCheckOptions();
+      renderOptionStatusDetails();
+      loadAdminStats();
+    }
+
+    async function confirmHandCheckDone(packageId, btn) {
+      if (!canMaintain() || !packageId) return;
+
+      const pkg = packages.find((p) => p.package_id === packageId);
+      if (!pkg) return;
+
+      const intervalDays = Math.max(1, Number(pkg.hand_check_interval_days || 30));
+      const nowIso = new Date().toISOString();
+      const nextIso = computeNextHandCheckDate(intervalDays);
+      const targetVersion = els.optionHandCheckTargetVersion?.value.trim() || '';
+      const localVersion = getLocalCompareVersion(pkg);
+
+      let payload;
+
+      if (targetVersion) {
+        const cmp = compareVersionsClient(localVersion, targetVersion);
+
+        if (cmp === null) {
+          alert('Die Zielversion konnte nicht mit der lokalen Version verglichen werden. Prüfe lokale Version und Eingabe.');
+          return;
+        }
+
+        if (cmp >= 0) {
+          payload = {
+            hand_check_last_done_at: nowIso,
+            hand_check_next_due_at: nextIso,
+            hand_check_target_version: null,
+            hand_check_target_set_at: null,
+            update_available: false,
+            check_status: 'skipped',
+            check_message: `Hand-Check bestätigt: lokale Version ${localVersion} erreicht/übertrifft Zielversion ${targetVersion}. Nächster Hand-Check ist geplant.`,
+            updated_at: nowIso
+          };
+        } else {
+          payload = {
+            hand_check_last_done_at: nowIso,
+            hand_check_target_version: targetVersion,
+            hand_check_target_set_at: nowIso,
+            online_version: targetVersion,
+            update_available: true,
+            check_status: 'update_available',
+            check_message: `Hand-Check Zielversion ${targetVersion} ist höher als lokale Version ${localVersion}. Paket bleibt auf Update, bis die lokale Version erreicht ist.`,
+            updated_at: nowIso
+          };
+        }
+      } else {
+        payload = {
+          hand_check_last_done_at: nowIso,
+          hand_check_next_due_at: nextIso,
+          hand_check_target_version: null,
+          hand_check_target_set_at: null,
+          update_available: false,
+          check_status: 'not_checked',
+          check_message: 'Hand-Check wurde bestätigt. Nächster Hand-Check ist geplant.',
+          updated_at: nowIso
+        };
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Bestätige ...';
+
+      const { error } = await sb
+        .from('packages')
+        .update(payload)
+        .eq('package_id', packageId);
+
+      btn.disabled = false;
+      btn.textContent = 'Hand-Check erledigt';
+
+      if (error) {
+        alert(`Fehler beim Bestätigen des Hand-Checks: ${error.message}`);
+        return;
+      }
+
+      patchPackageLocal(packageId, payload);
+      renderPackagesPreserveScroll();
+      renderHandCheckOptions();
+      renderOptionStatusDetails();
+      loadAdminStats();
+    }
+
+    async function savePackageState(packageId, btn) {
+      if (!canMaintain()) return;
+
+      const targetStatus = els.optionPackageStatus.value;
+      const isIgnored = targetStatus === 'ignored';
+      const reason = els.optionIgnoreReason.value.trim();
+
+      if (isIgnored && !reason) {
+        alert('Bitte einen Kommentar / Ignore-Grund eintragen.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Speichere ...';
+
+      const payload = isIgnored
+        ? {
+            package_status: 'ignored',
+            ignored: true,
+            ignore_reason: reason,
+            check_status: 'skipped',
+            check_message: 'Paket wurde über die Website deaktiviert / auf ignored gesetzt.'
+          }
+        : {
+            package_status: 'active',
+            ignored: false,
+            ignore_reason: null,
+            check_status: 'not_checked',
+            check_message: 'Paket wurde über die Website wieder aktiviert.'
+          };
+
+      const { error } = await sb
+        .from('packages')
+        .update(payload)
+        .eq('package_id', packageId);
+
+      btn.disabled = false;
+      btn.textContent = 'Speichern';
+
+      if (error) {
+        alert(`Fehler beim Speichern des Paketstatus: ${error.message}`);
+        return;
+      }
+
+      if (isIgnored) {
+        await sb
+          .from('check_jobs')
+          .update({
+            status: 'done',
+            finished_at: new Date().toISOString(),
+            message: 'Job übersprungen, Paket ist ignored.'
+          })
+          .eq('package_id', packageId)
+          .in('status', ['queued', 'running']);
+      }
+
+      patchPackageLocal(packageId, {
+        ...payload,
+        updated_at: new Date().toISOString()
+      });
+      renderPackagesPreserveScroll();
+
+      if (currentSourcesPackageId === packageId && els.sourcesDialog.open) {
+        renderOptionsInstallation();
+        renderPackageState();
+        renderOptionStatusDetails();
+      }
+      loadAdminStats();
+    }
+
+    function safeJson(value) {
+      if (value === null || value === undefined) return '';
+      try {
+        if (typeof value === 'string') {
+          try {
+            return JSON.stringify(JSON.parse(value), null, 2);
+          } catch {
+            return value;
+          }
+        }
+        return JSON.stringify(value, null, 2);
+      } catch {
+        return String(value);
+      }
+    }
+
+    async function loadOptionChecks(packageId) {
+      if (!packageId) return;
+
+      els.optionStatusDetails.innerHTML = '<div class="muted" style="margin-top:8px;">Lade ausführliche Statusdetails ...</div>';
+
+      const { data, error } = await sb
+        .from('package_checks')
+        .select('*')
+        .eq('package_id', packageId)
+        .order('checked_at', { ascending: false })
+        .limit(2);
+
+      if (error) {
+        optionChecks = [];
+        renderOptionStatusDetails(error.message);
+        return;
+      }
+
+      optionChecks = data || [];
+      renderOptionStatusDetails();
+    }
+
+    function renderOptionStatusDetails(loadError = '') {
+      const pkg = packages.find((p) => p.package_id === currentSourcesPackageId);
+      if (!pkg) {
+        els.optionStatusDetails.innerHTML = '<div class="muted" style="margin-top:8px;">Kein Paket geladen.</div>';
+        return;
+      }
+
+      const packageMessages = [
+        pkg.check_message,
+        pkg.version_compare_message
+      ].filter(Boolean);
+
+      const packageMessageHtml = packageMessages.length
+        ? packageMessages.map((msg) => `<div class="check-message">${escapeHtml(msg)}</div>`).join('')
+        : '<div class="muted">Keine Statusmeldung am Paket hinterlegt.</div>';
+
+      const loadErrorHtml = loadError
+        ? `<div class="check-error">Fehler beim Laden der package_checks: ${escapeHtml(loadError)}</div>`
+        : '';
+
+      const checksHtml = optionChecks.length
+        ? `
+          <div class="check-list">
+            ${optionChecks.map((check) => {
+              const hasError = check.error_type || check.error_detail;
+              const raw = safeJson(check.raw_result);
+              return `
+                <div class="check-item">
+                  <div class="check-item-head">
+                    <div>
+                      <div class="check-title">Check vom ${formatDate(check.checked_at)}</div>
+                      <div class="muted" style="font-size:12px;margin-top:3px;">
+                        Methode: ${escapeHtml(check.version_compare_method || '-')} · Confidence: ${escapeHtml(check.confidence || '-')}
+                      </div>
+                    </div>
+                    ${statusPill(check.update_available ? 'update_available' : (check.error_type ? 'failed' : 'up_to_date'), check.update_available)}
+                  </div>
+
+                  <div class="status-detail-grid" style="margin-top:8px;">
+                    <div class="status-detail-box">
+                      <div class="caption">Vergleichsbasis</div>
+                      <div class="content">${escapeHtml(check.local_version || '-')}</div>
+                    </div>
+                    <div class="status-detail-box">
+                      <div class="caption">Online-Version</div>
+                      <div class="content">${escapeHtml(check.online_version || '-')}</div>
+                    </div>
+                    <div class="status-detail-box">
+                      <div class="caption">Quelle</div>
+                      <div class="content">${escapeHtml(check.source_url || '-')}</div>
+                    </div>
+                  </div>
+
+                  ${check.message ? `<div class="check-message">${escapeHtml(check.message)}</div>` : ''}
+                  ${hasError ? `<div class="check-error"><strong>${escapeHtml(check.error_type || 'Fehler')}</strong>${check.error_detail ? `\n${escapeHtml(check.error_detail)}` : ''}</div>` : ''}
+                  ${raw ? `<details class="check-raw"><summary>Rohdaten / Debug anzeigen</summary><pre>${escapeHtml(raw)}</pre></details>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `
+        : '<div class="muted" style="margin-top:12px;">Noch keine ausführlichen package_checks für dieses Paket vorhanden.</div>';
+
+      els.optionStatusDetails.innerHTML = `
+        <div class="status-detail-head">
+          <div>${statusPill(pkg.check_status, pkg.update_available)}</div>
+          <div class="muted" style="font-size:12px;">Letzte Abfrage: ${formatDate(pkg.last_checked)}</div>
+        </div>
+
+        <div class="status-detail-grid">
+          <div class="status-detail-box">
+            <div class="caption">Paket-ID</div>
+            <div class="content">${escapeHtml(pkg.package_id)}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Paketstatus</div>
+            <div class="content">${escapeHtml(pkg.package_status || '-')} · ignored=${pkg.ignored === true ? 'true' : 'false'}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Ignore-Grund</div>
+            <div class="content">${escapeHtml(pkg.ignore_reason || '-')}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Dev2-Version</div>
+            <div class="content">${escapeHtml(pkg.local_dev2_version || pkg.local_version || '-')}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Git-Version</div>
+            <div class="content">${escapeHtml(pkg.git_version || '-')}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Letztes Git-Update</div>
+            <div class="content">${formatDate(pkg.git_last_package_update)}</div>
+          </div>
+          <div class="status-detail-box">
+            <div class="caption">Online-Version</div>
+            <div class="content">${escapeHtml(pkg.manual_override ? pkg.manual_online_version : (pkg.online_version || '-'))}</div>
+          </div>
+        </div>
+
+        ${packageMessageHtml}
+        ${loadErrorHtml}
+        ${checksHtml}
+      `;
+    }
+
+    function applyNewSourceDefaults() {
+      const type = els.newSourceType.value;
+
+      if (type === 'github_releases') {
+        els.newSourceVersionSelector.value = 'tag';
+      } else if (type === 'winget') {
+        els.newSourceVersionSelector.value = 'winget_id';
+      } else if (type === 'vendor_release_notes' || type === 'vendor_download_page' || type === 'vendor_changelog' || type === 'custom_url') {
+        els.newSourceVersionSelector.value = 'html_regex';
+      } else {
+        els.newSourceVersionSelector.value = '';
+      }
+
+      updateNewSourceSelectorHelp();
+    }
+
+    function updateNewSourceSelectorHelp() {
+      const selector = els.newSourceVersionSelector.value;
+
+      if (selector === 'winst-manager') {
+        els.newSourceSelectorHelp.innerHTML = `
+          <strong>winst-manager:</strong> URL = Website mit Versionsanzeige, Pattern = Regex mit Gruppe 1, z. B. <code>/Version 20([\\d.]+)/</code>.<br>
+          XPath, Regex-Gruppe und Download-Website kannst du im Hinweisfeld speichern, z. B. <code>XPath: ...</code>, <code>Regex-Gruppe: 1</code>, <code>Download: https://...</code>.
+        `;
+        if (!els.newSourceVersionPattern.value) {
+          els.newSourceVersionPattern.value = '/Version\\s+([\\d.]+)/';
+        }
+        return;
+      }
+
+      if (selector === 'html_regex') {
+        els.newSourceSelectorHelp.innerHTML = 'HTML-Seite laden und Version per Regex aus HTML/Text extrahieren. Standardmäßig wird die erste Capture-Gruppe als Version genutzt. Optional kannst du mit Versions-Template Gruppen zusammensetzen, z. B. <code>$1.$2</code>.';
+        return;
+      }
+
+      if (selector === 'html_deep_regex') {
+        els.newSourceSelectorHelp.innerHTML = 'HTML-Deep-Regex: durchsucht zuerst Roh-HTML, Text und finale URL. Falls dort nichts gefunden wird, lädt die Edge Function zusätzlich same-origin JavaScript-Chunks und sucht dort weiter. Sinnvoll für Next.js/React-Seiten, bei denen Versionen in JS-Chunks oder Attributen stecken. Versions-Template wie <code>$1.$2</code> wird unterstützt.';
+        return;
+      }
+
+      if (selector === 'download_url_regex') {
+        els.newSourceSelectorHelp.innerHTML = 'Version direkt aus der URL per Regex extrahieren. Standardmäßig wird die erste Capture-Gruppe als Version genutzt. Optional kannst du mit Versions-Template Gruppen zusammensetzen, z. B. <code>$1.$2</code>.';
+        return;
+      }
+
+      if (selector === 'winget_id') {
+        els.newSourceSelectorHelp.innerHTML = 'Für Winget muss im Pattern der Winget-Identifier stehen, z. B. <code>Adobe.Acrobat.Reader.64-bit</code>. Optional: Mit <strong>Version-Transform-Regex</strong> und <strong>Versions-Template</strong> kann die gefundene Winget-Version danach umgebaut werden, z. B. Transform-Regex <code>^(.+)$</code> und Template <code>1:$1</code> macht aus <code>5.4.920.0</code> den Wert <code>1:5.4.920.0</code>.';
+        return;
+      }
+
+      els.newSourceSelectorHelp.innerHTML = 'Für GitHub-Releases reicht meistens <code>tag</code>. Optional: Mit <strong>Version-Transform-Regex</strong> und <strong>Versions-Template</strong> kann die gefundene GitHub-Version danach umgebaut werden, z. B. Transform-Regex <code>^v?(.+)$</code> und Template <code>$1</code> entfernt ein führendes <code>v</code>, oder Template <code>1:$1</code> ergänzt einen Präfix.';
+    }
+
+    function clearNewSourceForm() {
+      els.newSourceType.value = 'vendor_release_notes';
+      els.newSourceUrl.value = '';
+      els.newSourceVersionSelector.value = 'html_regex';
+      els.newSourceVersionPattern.value = '';
+      els.newSourceVersionTemplate.value = '';
+      if (els.newSourceVersionTransformPattern) els.newSourceVersionTransformPattern.value = '';
+      els.newSourceNote.value = '';
+      els.newSourcePriority.value = '1';
+      els.newSourceReliability.value = '50';
+      els.newSourceInterval.value = '24';
+      els.newSourceEnabled.value = 'true';
+      updateNewSourceSelectorHelp();
+    }
+
+    function renderSourcesDialog() {
+      const sources = sourcesByPackage[currentSourcesPackageId] || [];
+
+      if (!sources.length) {
+        els.sourcesList.innerHTML = `<div class="empty">Für dieses Paket sind noch keine Quellen hinterlegt.</div>`;
+        return;
+      }
+
+      els.sourcesList.innerHTML = sources.map((s) => `
+        <div class="source-grid" data-source-row="${s.id}">
+          <div class="source-cell">
+            <div class="source-field-caption">Priorität</div>
+            <input class="input" type="number" min="1" value="${s.priority ?? 1}" data-source-field="priority" data-source-id="${s.id}">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Typ</div>
+            <select class="select" data-source-field="source_type" data-source-id="${s.id}">
+              ${sourceTypeOptions(s.source_type)}
+            </select>
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">URL</div>
+            <input class="input" value="${escapeHtml(s.source_url || '')}" data-source-field="source_url" data-source-id="${s.id}">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Versions-Selector</div>
+            <select class="select" data-source-field="version_selector" data-source-id="${s.id}">
+              ${versionSelectorOptions(s.version_selector)}
+            </select>
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Pattern / Regex</div>
+            <input class="input" value="${escapeHtml(s.version_pattern || '')}" data-source-field="version_pattern" data-source-id="${s.id}" placeholder="([0-9]+\\.[0-9]+\\.[0-9]+)">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Template</div>
+            <input class="input" value="${escapeHtml(s.version_template || '')}" data-source-field="version_template" data-source-id="${s.id}" placeholder="$1.$2 / 1:$1">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Transform-Regex</div>
+            <input class="input" value="${escapeHtml(s.version_transform_pattern || '')}" data-source-field="version_transform_pattern" data-source-id="${s.id}" placeholder="^(.+)$">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Zuverl.</div>
+            <input class="input" type="number" min="0" max="100" value="${s.reliability_score ?? 50}" data-source-field="reliability_score" data-source-id="${s.id}">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Intervall</div>
+            <input class="input" type="number" min="1" value="${s.check_interval_hours ?? 24}" data-source-field="check_interval_hours" data-source-id="${s.id}">
+          </div>
+
+          <div class="source-cell">
+            <div class="source-field-caption">Aktiv</div>
+            <select class="select" data-source-field="enabled" data-source-id="${s.id}">
+              <option value="true" ${s.enabled ? 'selected' : ''}>Ja</option>
+              <option value="false" ${!s.enabled ? 'selected' : ''}>Nein</option>
+            </select>
+          </div>
+
+          <div class="row-actions">
+            ${canMaintain() ? `
+              <button class="btn secondary small" data-save-source="${s.id}">Speichern</button>
+              <button class="btn danger small" data-delete-source="${s.id}">Löschen</button>
+            ` : ''}
+          </div>
+          <div class="source-note-row">
+            <textarea class="textarea" data-source-field="source_note" data-source-id="${s.id}" placeholder="Hinweis">${escapeHtml(s.source_note || '')}</textarea>
+            <div class="muted" style="font-size:12px;margin-top:5px;">
+              Letzte Prüfung: ${formatDate(s.last_checked)} · Status: ${escapeHtml(s.last_status || '-')}
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      document.querySelectorAll('[data-save-source]').forEach((btn) => {
+        btn.addEventListener('click', () => saveSource(Number(btn.dataset.saveSource), btn));
+      });
+
+      document.querySelectorAll('[data-delete-source]').forEach((btn) => {
+        btn.addEventListener('click', () => deleteSource(Number(btn.dataset.deleteSource), btn));
+      });
+    }
+
+    function sourceTypeOptions(selected) {
+      const types = [
+        'github_releases',
+        'vendor_release_notes',
+        'vendor_download_page',
+        'vendor_changelog',
+        'winget',
+        'custom_url',
+        'ai_search_fallback'
+      ];
+
+      return types.map((t) => `<option value="${t}" ${t === selected ? 'selected' : ''}>${t}</option>`).join('');
+    }
+
+    function versionSelectorOptions(selected) {
+      const selectors = [
+        '',
+        'tag',
+        'release_name',
+        'brave_chromium_composite',
+        'html_regex',
+        'html_deep_regex',
+        'download_url_regex',
+        'winget_id',
+        'winst-manager'
+      ];
+
+      return selectors.map((t) => {
+        const label = t || 'Automatisch / leer';
+        return `<option value="${t}" ${t === (selected || '') ? 'selected' : ''}>${label}</option>`;
+      }).join('');
+    }
+
+    async function addSource() {
+      if (!canMaintain()) return;
+
+      const payload = {
+        package_id: currentSourcesPackageId,
+        source_type: els.newSourceType.value,
+        source_url: els.newSourceUrl.value.trim(),
+        version_selector: els.newSourceVersionSelector.value || null,
+        version_pattern: els.newSourceVersionPattern.value.trim() || null,
+        version_template: els.newSourceVersionTemplate.value.trim() || null,
+        version_transform_pattern: els.newSourceVersionTransformPattern?.value.trim() || null,
+        source_note: els.newSourceNote.value.trim() || null,
+        priority: Number(els.newSourcePriority.value || 1),
+        reliability_score: Number(els.newSourceReliability.value || 50),
+        check_interval_hours: Number(els.newSourceInterval.value || 24),
+        enabled: els.newSourceEnabled.value === 'true'
+      };
+
+      if (!payload.source_url && payload.source_type !== 'ai_search_fallback') {
+        setMessage(els.sourcesMessage, 'Bitte eine URL eintragen.', 'error');
+        return;
+      }
+
+      if (payload.source_type === 'ai_search_fallback' && !payload.source_url) {
+        payload.source_url = 'ai://search-fallback';
+      }
+
+      if (payload.version_selector === 'winst-manager' && !payload.source_note) {
+        payload.source_note = 'XPath: /html/body/div[64]/div/main/div[2]/div[2]/section/div[1]/div/div[2]/header/div/span\nRegex-Gruppe: 1\nDownload: https://www.adobe.com/devnet-docs/acrobatetk/tools/ReleaseNotesDC/index.html#continuous-track';
+      }
+
+      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'html_deep_regex' || payload.version_selector === 'download_url_regex' || payload.version_selector === 'winst-manager') && !payload.version_pattern) {
+        setMessage(els.sourcesMessage, 'Für html_regex, html_deep_regex, download_url_regex oder winst-manager bitte ein Versions-Pattern eintragen.', 'error');
+        return;
+      }
+
+      if (payload.source_type === 'winget' && !payload.version_pattern) {
+        setMessage(els.sourcesMessage, 'Für Winget bitte den Winget-Identifier als Versions-Pattern eintragen, z. B. 7zip.7zip.', 'error');
+        return;
+      }
+
+      els.addSourceBtn.disabled = true;
+
+      const { error } = await sb.from('package_sources').insert(payload);
+
+      els.addSourceBtn.disabled = false;
+
+      if (error) {
+        setMessage(els.sourcesMessage, error.message, 'error');
+        return;
+      }
+
+      setMessage(els.sourcesMessage, 'Quelle wurde hinzugefügt.', 'ok');
+      clearNewSourceForm();
+      await loadSources();
+      renderSourcesDialog();
+      renderPackagesPreserveScroll();
+    }
+
+    async function saveSource(sourceId, btn) {
+      if (!canMaintain()) return;
+
+      const row = document.querySelector(`[data-source-row="${sourceId}"]`);
+      if (!row) return;
+
+      const read = (field) => row.querySelector(`[data-source-field="${field}"][data-source-id="${sourceId}"]`)?.value;
+
+      const payload = {
+        priority: Number(read('priority') || 1),
+        source_type: read('source_type'),
+        source_url: read('source_url')?.trim(),
+        version_selector: read('version_selector') || null,
+        version_pattern: read('version_pattern')?.trim() || null,
+        version_template: read('version_template')?.trim() || null,
+        version_transform_pattern: read('version_transform_pattern')?.trim() || null,
+        reliability_score: Number(read('reliability_score') || 50),
+        check_interval_hours: Number(read('check_interval_hours') || 24),
+        enabled: read('enabled') === 'true',
+        source_note: read('source_note')?.trim() || null
+      };
+
+      if (!payload.source_url && payload.source_type !== 'ai_search_fallback') {
+        alert('Bitte eine URL eintragen.');
+        return;
+      }
+
+      if ((payload.version_selector === 'html_regex' || payload.version_selector === 'html_deep_regex' || payload.version_selector === 'download_url_regex' || payload.version_selector === 'winst-manager') && !payload.version_pattern) {
+        alert('Für html_regex, html_deep_regex, download_url_regex oder winst-manager bitte ein Versions-Pattern eintragen.');
+        return;
+      }
+
+      if (payload.source_type === 'winget' && !payload.version_pattern) {
+        alert('Für Winget bitte den Winget-Identifier als Versions-Pattern eintragen, z. B. 7zip.7zip.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Speichere ...';
+
+      const { error } = await sb
+        .from('package_sources')
+        .update(payload)
+        .eq('id', sourceId);
+
+      btn.disabled = false;
+      btn.textContent = 'Speichern';
+
+      if (error) {
+        alert(`Fehler beim Speichern: ${error.message}`);
+        return;
+      }
+
+      await loadSources();
+      renderSourcesDialog();
+      renderPackagesPreserveScroll();
+    }
+
+    async function deleteSource(sourceId, btn) {
+      if (!canMaintain()) return;
+
+      if (!confirm('Diese Quelle wirklich löschen?')) return;
+
+      btn.disabled = true;
+
+      const { error } = await sb
+        .from('package_sources')
+        .delete()
+        .eq('id', sourceId);
+
+      if (error) {
+        alert(`Fehler beim Löschen: ${error.message}`);
+        btn.disabled = false;
+        return;
+      }
+
+      await loadSources();
+      renderSourcesDialog();
+      renderPackagesPreserveScroll();
+    }
+
+    init();
+  </script>
+</body>
+</html>
