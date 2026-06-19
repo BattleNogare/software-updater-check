@@ -1393,6 +1393,7 @@
     let packages = [];
     let sourcesByPackage = {};
     let ticketLinksByPackage = {};
+    const ticketPollTimers = new Map();
     let optionChecks = [];
     let sortKey = 'name';
     let sortDir = 'asc';
@@ -1885,15 +1886,17 @@
       }
 
       const ticketId = Number(link.ticket_id);
-      const status = link.ticket_status_name || 'Ticket';
       const assignedFirstName = String(link.assigned_to_name || '').trim().split(/\s+/)[0] || '';
       const isClosed = link.ticket_is_closed === true;
+      const isPending = !link.ticket_status_name;
+      const status = isPending ? 'Prüfung' : link.ticket_status_name;
       const buttonText = isClosed
         ? `#${ticketId} ${status}`
         : `#${ticketId} ${status}${assignedFirstName ? ' ' + assignedFirstName : ''}`;
-      const style = isClosed ? '' : ' style="color:#3fa66b;"';
+      const style = isPending ? '' : (isClosed ? '' : ' style="color:#3fa66b;"');
+      const action = isPending ? 'pending' : (isClosed ? 'closed' : 'open');
 
-      return `<button class="btn secondary small" data-ticket="${escapeHtml(pkg.package_id)}" data-ticket-action="${isClosed ? 'closed' : 'open'}" data-ticket-id="${ticketId}"${style}>${escapeHtml(buttonText)}</button>`;
+      return `<button class="btn secondary small" data-ticket="${escapeHtml(pkg.package_id)}" data-ticket-action="${action}" data-ticket-id="${ticketId}"${style}>${escapeHtml(buttonText)}</button>`;
     }
 
     function setDashboardGlow(statEl, className) {
@@ -2154,120 +2157,219 @@
       });
 
       document.querySelectorAll('[data-ticket]').forEach((btn) => {
-        bindTicketButton(btn);
+        let longPressTimer = null;
+
+        const clearLongPress = () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        };
+
+        if (btn.dataset.ticketAction === 'closed') {
+          const startLongPress = () => {
+            clearLongPress();
+            btn.dataset.longpressFired = '0';
+            longPressTimer = setTimeout(() => {
+              btn.dataset.longpressFired = '1';
+              queueRedmineTicketCopy(btn.dataset.ticket, btn);
+            }, 1000);
+          };
+
+          btn.addEventListener('mousedown', startLongPress);
+          btn.addEventListener('touchstart', startLongPress, { passive: true });
+          btn.addEventListener('mouseup', clearLongPress);
+          btn.addEventListener('mouseleave', clearLongPress);
+          btn.addEventListener('touchend', clearLongPress);
+          btn.addEventListener('touchcancel', clearLongPress);
+        }
+
+        btn.addEventListener('click', (event) => {
+          if (btn.dataset.longpressFired === '1') {
+            btn.dataset.longpressFired = '0';
+            event.preventDefault();
+            return;
+          }
+          handleTicketButtonClick(btn.dataset.ticket, btn.dataset.ticketAction, btn.dataset.ticketId, btn);
+        });
       });
 
     }
 
-    function bindTicketButton(btn) {
-      let holdTimer = null;
-      let longPressDone = false;
+    async function handleTicketButtonClick(packageId, action, ticketId, btn) {
+      if (!currentUser) {
+        alert('Bitte zuerst einloggen.');
+        return;
+      }
 
-      const clearHoldTimer = () => {
-        if (holdTimer) clearTimeout(holdTimer);
-        holdTimer = null;
-      };
-
-      const startHold = () => {
-        longPressDone = false;
-        clearHoldTimer();
-        if (btn.dataset.ticketAction !== 'closed') return;
-        holdTimer = setTimeout(async () => {
-          longPressDone = true;
-          await createCopiedRedmineTicket(btn.dataset.ticket, btn);
-        }, 1000);
-      };
-
-      btn.addEventListener('mousedown', startHold);
-      btn.addEventListener('touchstart', startHold, { passive: true });
-      btn.addEventListener('mouseup', clearHoldTimer);
-      btn.addEventListener('mouseleave', clearHoldTimer);
-      btn.addEventListener('touchend', clearHoldTimer);
-      btn.addEventListener('touchcancel', clearHoldTimer);
-
-      btn.addEventListener('click', async (event) => {
-        if (longPressDone) {
-          event.preventDefault();
-          longPressDone = false;
+      if (action === 'new') {
+        const input = prompt('Bitte Ticket-ID eintragen:');
+        if (!input) return;
+        const cleaned = String(input).replace(/[^0-9]/g, '');
+        if (!cleaned) {
+          alert('Keine gültige Ticket-ID eingegeben.');
           return;
         }
-        clearHoldTimer();
-        await handleTicketButtonClick(btn.dataset.ticket, btn);
-      });
-    }
-
-    async function handleTicketButtonClick(packageId, btn) {
-      const action = btn.dataset.ticketAction || 'new';
-      const ticketId = btn.dataset.ticketId;
-
-      if (action === 'open' || action === 'closed') {
-        if (ticketId) window.open(`https://redmine.iserv.eu/issues/${ticketId}`, '_blank', 'noopener');
+        await queueRedmineTicketCheck(packageId, Number(cleaned), btn);
         return;
       }
 
-      const entered = prompt('Bitte Ticket-ID eintragen:');
-      if (!entered) return;
+      if (ticketId) {
+        window.open(`https://redmine.iserv.eu/issues/${ticketId}`, '_blank', 'noopener');
+      }
+    }
 
-      const cleanTicketId = String(entered).replace(/[^0-9]/g, '');
-      if (!cleanTicketId) {
-        alert('Keine gültige Ticket-ID eingetragen.');
+    async function queueRedmineTicketCheck(packageId, ticketId, btn) {
+      const originalText = btn?.textContent || '';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Prüfung ...';
+      }
+
+      try {
+        const now = new Date().toISOString();
+        const linkPayload = {
+          package_id: packageId,
+          ticket_id: ticketId,
+          ticket_status_id: null,
+          ticket_status_name: null,
+          ticket_is_closed: null,
+          assigned_to_id: null,
+          assigned_to_name: null,
+          subject: null,
+          redmine_url: `https://redmine.iserv.eu/issues/${ticketId}`,
+          last_checked_at: null,
+          next_check_at: now,
+          last_error: null,
+          relation_chain: []
+        };
+
+        const { data: savedLink, error: linkError } = await sb
+          .from('redmine_ticket_links')
+          .upsert(linkPayload, { onConflict: 'package_id' })
+          .select('*')
+          .single();
+
+        if (linkError) throw linkError;
+
+        ticketLinksByPackage[packageId] = savedLink || linkPayload;
+
+        const { error: jobError } = await sb
+          .from('redmine_ticket_jobs')
+          .insert({
+            job_type: 'check_ticket',
+            status: 'queued',
+            package_id: packageId,
+            ticket_id: ticketId,
+            priority: 10,
+            requested_by: currentUser?.id || null,
+            message: 'Ticketprüfung über Website angefordert'
+          });
+
+        if (jobError && jobError.code !== '23505') throw jobError;
+
+        renderPackagesPreserveScroll();
+        startTicketPoll(packageId);
+      } catch (error) {
+        console.error(error);
+        alert(`Ticket-Prüfung konnte nicht in die dev2-Queue gelegt werden: ${error.message || error}`);
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      }
+    }
+
+    async function queueRedmineTicketCopy(packageId, btn) {
+      if (!currentUser) {
+        alert('Bitte zuerst einloggen.');
         return;
       }
 
-      await checkAndSaveRedmineTicket(packageId, cleanTicketId, btn);
-    }
+      const link = ticketLinksByPackage[packageId];
+      if (!link?.ticket_id) return;
 
-    async function checkAndSaveRedmineTicket(packageId, ticketId, btn) {
-      const oldText = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Prüfe ...';
+      const originalText = btn?.textContent || '';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Erstelle ...';
+      }
 
       try {
-        const { data, error } = await sb.functions.invoke('redmine-ticket-check', {
-          body: { package_id: packageId, ticket_id: Number(ticketId) }
-        });
+        const { error: jobError } = await sb
+          .from('redmine_ticket_jobs')
+          .insert({
+            job_type: 'create_copy',
+            status: 'queued',
+            package_id: packageId,
+            ticket_id: Number(link.ticket_id),
+            priority: 20,
+            requested_by: currentUser?.id || null,
+            message: 'Ticket-Kopie über Website angefordert'
+          });
 
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
-
-        if (data?.ticket) {
-          ticketLinksByPackage[packageId] = data.ticket;
-        }
-
-        renderPackagesPreserveScroll();
+        if (jobError && jobError.code !== '23505') throw jobError;
+        startTicketPoll(packageId);
       } catch (error) {
-        alert(`Ticket konnte nicht geprüft/gespeichert werden: ${error.message || error}`);
-        btn.disabled = false;
-        btn.textContent = oldText;
+        console.error(error);
+        alert(`Ticket-Kopie konnte nicht in die dev2-Queue gelegt werden: ${error.message || error}`);
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
       }
     }
 
-    async function createCopiedRedmineTicket(packageId, btn) {
-      if (!confirm('Geschlossenes Ticket kopieren und ein neues Redmine-Ticket anlegen?')) return;
+    async function refreshTicketLink(packageId) {
+      const { data, error } = await sb
+        .from('redmine_ticket_links')
+        .select('*')
+        .eq('package_id', packageId)
+        .maybeSingle();
 
-      const oldText = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Lege an ...';
-
-      try {
-        const { data, error } = await sb.functions.invoke('redmine-ticket-create-copy', {
-          body: { package_id: packageId }
-        });
-
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
-
-        if (data?.ticket) {
-          ticketLinksByPackage[packageId] = data.ticket;
-        }
-
-        renderPackagesPreserveScroll();
-        if (data?.ticket_url) window.open(data.ticket_url, '_blank', 'noopener');
-      } catch (error) {
-        alert(`Ticket konnte nicht angelegt werden: ${error.message || error}`);
-        btn.disabled = false;
-        btn.textContent = oldText;
+      if (!error && data) {
+        ticketLinksByPackage[packageId] = data;
       }
+
+      const { data: activeJobs } = await sb
+        .from('redmine_ticket_jobs')
+        .select('id,status,error_message')
+        .eq('package_id', packageId)
+        .in('status', ['queued', 'running'])
+        .limit(1);
+
+      renderPackagesPreserveScroll();
+      return (activeJobs || []).length > 0;
+    }
+
+    function startTicketPoll(packageId) {
+      if (ticketPollTimers.has(packageId)) return;
+
+      const timer = setInterval(async () => {
+        try {
+          const stillActive = await refreshTicketLink(packageId);
+          if (!stillActive) {
+            clearInterval(timer);
+            ticketPollTimers.delete(packageId);
+          }
+        } catch (error) {
+          console.warn('Ticket-Polling fehlgeschlagen:', error);
+        }
+      }, 5000);
+
+      ticketPollTimers.set(packageId, timer);
+
+      setTimeout(async () => {
+        try {
+          const stillActive = await refreshTicketLink(packageId);
+          if (!stillActive && ticketPollTimers.has(packageId)) {
+            clearInterval(ticketPollTimers.get(packageId));
+            ticketPollTimers.delete(packageId);
+          }
+        } catch (error) {
+          console.warn('Ticket-Polling fehlgeschlagen:', error);
+        }
+      }, 1500);
     }
 
 async function requestSync(packageId, btn) {
