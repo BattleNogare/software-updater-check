@@ -365,7 +365,7 @@
 
     .toolbar {
       display: grid;
-      grid-template-columns: 1fr auto auto auto auto;
+      grid-template-columns: 1fr auto auto auto auto auto;
       gap: 10px;
       margin: 16px 0 8px;
       background: rgba(20, 20, 20, 0.78);
@@ -1070,6 +1070,7 @@
 
       <div class="top-actions">
         <button id="packageChecksBtn" class="btn secondary small" type="button">Paket-Checks</button>
+        <span class="card-info" tabindex="0" data-tip="Paketstatus: Grün = aktuell, Blau = Update, Orange = unsicher, Pink = Hand-Check, Rot = Fehler. Ticket-Button: Orange = kein Ticket, Grün = offenes Ticket, normale Farbe = geschlossenes Ticket. Langer Klick auf geschlossenes Ticket erstellt eine Kopie.">🛈</span>
         <div class="user-box">
           <div class="user-meta">
             <div id="userEmail" class="user-email">-</div>
@@ -1144,6 +1145,15 @@
         <option value="archived">Archiviert</option>
         <option value="deprecated">Deprecated</option>
         <option value="broken">Broken</option>
+      </select>
+
+      <select id="ticketFilter" class="select">
+        <option value="">Alle Tickets</option>
+        <option value="none">Kein Ticket hinterlegt</option>
+        <option value="exists">Ticket hinterlegt</option>
+        <option value="open">Ticket offen</option>
+        <option value="closed">Ticket geschlossen</option>
+        <option value="pending">Ticket-Prüfung offen</option>
       </select>
 
       <button id="reloadBtn" class="btn secondary">Neu laden</button>
@@ -1392,6 +1402,8 @@
     let currentRole = 'viewer';
     let packages = [];
     let sourcesByPackage = {};
+    let ticketLinksByPackage = {};
+    const ticketPollTimers = new Map();
     let optionChecks = [];
     let sortKey = 'name';
     let sortDir = 'asc';
@@ -1421,6 +1433,7 @@
       searchInput: $('searchInput'),
       statusFilter: $('statusFilter'),
       packageStatusFilter: $('packageStatusFilter'),
+      ticketFilter: $('ticketFilter'),
       reloadBtn: $('reloadBtn'),
       openInstallImportBtn: $('openInstallImportBtn'),
       selectionCount: $('selectionCount'),
@@ -1608,6 +1621,7 @@
       els.searchInput.addEventListener('input', renderPackages);
       els.statusFilter.addEventListener('change', renderPackages);
       els.packageStatusFilter.addEventListener('change', renderPackages);
+      if (els.ticketFilter) els.ticketFilter.addEventListener('change', renderPackages);
 
       document.querySelectorAll('th.sortable').forEach((th) => {
         th.addEventListener('click', () => {
@@ -1771,6 +1785,7 @@
         const y = window.scrollY;
         await loadPackages();
         await loadSources();
+        await loadTicketLinks();
         if (preserveScroll) {
           renderPackagesPreserveScroll(y);
         } else {
@@ -1854,6 +1869,46 @@
         console.error(error);
         sourcesByPackage = {};
       }
+    }
+
+    async function loadTicketLinks() {
+      try {
+        const data = await fetchAllRows(
+          'redmine_ticket_links',
+          '*',
+          (query) => query.order('updated_at', { ascending: false })
+        );
+
+        ticketLinksByPackage = {};
+        for (const link of data || []) {
+          if (!link.package_id) continue;
+          ticketLinksByPackage[link.package_id] = link;
+        }
+      } catch (error) {
+        console.warn('Redmine-Ticket-Links konnten nicht geladen werden:', error);
+        ticketLinksByPackage = {};
+      }
+    }
+
+    function ticketButton(pkg) {
+      const link = ticketLinksByPackage[pkg.package_id];
+
+      if (!link || !link.ticket_id) {
+        return `<button class="btn secondary small" data-ticket="${escapeHtml(pkg.package_id)}" data-ticket-action="new" style="color:#d8922b;">Neues Ticket anlegen</button>`;
+      }
+
+      const ticketId = Number(link.ticket_id);
+      const assignedFirstName = String(link.assigned_to_name || '').trim().split(/\s+/)[0] || '';
+      const isClosed = link.ticket_is_closed === true;
+      const isPending = !link.ticket_status_name;
+      const status = isPending ? 'Prüfung' : link.ticket_status_name;
+      const buttonText = isClosed
+        ? `#${ticketId} ${status}`
+        : `#${ticketId} ${status}${assignedFirstName ? ' ' + assignedFirstName : ''}`;
+      const style = isPending ? '' : (isClosed ? '' : ' style="color:#3fa66b;"');
+      const action = isPending ? 'pending' : (isClosed ? 'closed' : 'open');
+
+      return `<button class="btn secondary small" data-ticket="${escapeHtml(pkg.package_id)}" data-ticket-action="${action}" data-ticket-id="${ticketId}"${style}>${escapeHtml(buttonText)}</button>`;
     }
 
     function setDashboardGlow(statEl, className) {
@@ -1972,6 +2027,7 @@
       const q = els.searchInput.value.trim().toLowerCase();
       const status = els.statusFilter.value;
       const packageStatus = els.packageStatusFilter.value;
+      const ticketFilter = els.ticketFilter ? els.ticketFilter.value : '';
 
       let rows = [...packages];
 
@@ -1989,10 +2045,29 @@
         rows = rows.filter((p) => p.package_status === packageStatus);
       }
 
+      if (ticketFilter) {
+        rows = rows.filter((p) => {
+          const link = ticketLinksByPackage[p.package_id];
+          const hasTicket = !!(link && link.ticket_id);
+          const isPending = hasTicket && !link.ticket_status_name;
+          const isClosed = hasTicket && link.ticket_is_closed === true;
+          const isOpen = hasTicket && link.ticket_is_closed === false;
+
+          if (ticketFilter === 'none') return !hasTicket;
+          if (ticketFilter === 'exists') return hasTicket;
+          if (ticketFilter === 'open') return isOpen;
+          if (ticketFilter === 'closed') return isClosed;
+          if (ticketFilter === 'pending') return isPending;
+          return true;
+        });
+      }
+
       if (q) {
         rows = rows.filter((p) => {
           const src = sourcesByPackage[p.package_id] || [];
           const sourceText = src.map((s) => `${s.source_type} ${s.source_url} ${s.version_selector || ''} ${s.version_pattern || ''} ${s.version_template || ''} ${s.version_transform_pattern || ''} ${s.source_note || ''}`).join(' ');
+          const ticketLink = ticketLinksByPackage[p.package_id];
+          const ticketText = ticketLink ? `${ticketLink.ticket_id || ''} ${ticketLink.ticket_status_name || ''} ${ticketLink.assigned_to_name || ''} ${ticketLink.subject || ''} ${ticketLink.last_error || ''}` : '';
 
           const haystack = [
             p.name,
@@ -2007,7 +2082,8 @@
             p.package_status,
             p.category,
             p.source_path,
-            sourceText
+            sourceText,
+            ticketText
           ].join(' ').toLowerCase();
 
           return haystack.includes(q);
@@ -2068,14 +2144,14 @@
           ? `
             <div class="row-actions">
               ${syncButton}
-              <button class="btn secondary small" data-ticket="${escapeHtml(p.package_id)}">Ticket erstellen</button>
+              ${ticketButton(p)}
               <button class="btn secondary small" data-sources="${escapeHtml(p.package_id)}">Optionen</button>
             </div>
           `
           : `
             <div class="row-actions">
               ${syncButton}
-              <button class="btn secondary small" data-ticket="${escapeHtml(p.package_id)}">Ticket erstellen</button>
+              ${ticketButton(p)}
               <button class="btn secondary small" data-sources="${escapeHtml(p.package_id)}">Optionen</button>
             </div>
           `;
@@ -2114,15 +2190,212 @@
       });
 
       document.querySelectorAll('[data-ticket]').forEach((btn) => {
-        btn.addEventListener('click', () => createTicketPlaceholder(btn.dataset.ticket));
+        let longPressTimer = null;
+
+        const clearLongPress = () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        };
+
+        if (btn.dataset.ticketAction === 'closed') {
+          const startLongPress = () => {
+            clearLongPress();
+            btn.dataset.longpressFired = '0';
+            longPressTimer = setTimeout(() => {
+              btn.dataset.longpressFired = '1';
+              queueRedmineTicketCopy(btn.dataset.ticket, btn);
+            }, 1000);
+          };
+
+          btn.addEventListener('mousedown', startLongPress);
+          btn.addEventListener('touchstart', startLongPress, { passive: true });
+          btn.addEventListener('mouseup', clearLongPress);
+          btn.addEventListener('mouseleave', clearLongPress);
+          btn.addEventListener('touchend', clearLongPress);
+          btn.addEventListener('touchcancel', clearLongPress);
+        }
+
+        btn.addEventListener('click', (event) => {
+          if (btn.dataset.longpressFired === '1') {
+            btn.dataset.longpressFired = '0';
+            event.preventDefault();
+            return;
+          }
+          handleTicketButtonClick(btn.dataset.ticket, btn.dataset.ticketAction, btn.dataset.ticketId, btn);
+        });
       });
 
     }
 
-    function createTicketPlaceholder(packageId) {
-      const pkg = packages.find((p) => p.package_id === packageId);
-      alert(`Ticket-Erstellung ist vorbereitet, aber noch nicht implementiert.\n\nPaket: ${pkg?.name || packageId}\nPaket-ID: ${packageId}`);
+    async function handleTicketButtonClick(packageId, action, ticketId, btn) {
+      if (!currentUser) {
+        alert('Bitte zuerst einloggen.');
+        return;
+      }
+
+      if (action === 'new') {
+        const input = prompt('Bitte Ticket-ID eintragen:');
+        if (!input) return;
+        const cleaned = String(input).replace(/[^0-9]/g, '');
+        if (!cleaned) {
+          alert('Keine gültige Ticket-ID eingegeben.');
+          return;
+        }
+        await queueRedmineTicketCheck(packageId, Number(cleaned), btn);
+        return;
+      }
+
+      if (ticketId) {
+        window.open(`https://redmine.iserv.eu/issues/${ticketId}`, '_blank', 'noopener');
+      }
     }
+
+    async function queueRedmineTicketCheck(packageId, ticketId, btn) {
+      const originalText = btn?.textContent || '';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Prüfung ...';
+      }
+
+      try {
+        const now = new Date().toISOString();
+        const linkPayload = {
+          package_id: packageId,
+          ticket_id: ticketId,
+          ticket_status_id: null,
+          ticket_status_name: null,
+          ticket_is_closed: null,
+          assigned_to_id: null,
+          assigned_to_name: null,
+          subject: null,
+          redmine_url: `https://redmine.iserv.eu/issues/${ticketId}`,
+          last_checked_at: null,
+          next_check_at: now,
+          last_error: null,
+          relation_chain: []
+        };
+
+        const { data: savedLink, error: linkError } = await sb
+          .from('redmine_ticket_links')
+          .upsert(linkPayload, { onConflict: 'package_id' })
+          .select('*')
+          .single();
+
+        if (linkError) throw linkError;
+
+        ticketLinksByPackage[packageId] = savedLink || linkPayload;
+
+        const { error: jobError } = await sb
+          .from('redmine_ticket_jobs')
+          .insert({
+            job_type: 'check_ticket',
+            status: 'queued',
+            package_id: packageId,
+            ticket_id: ticketId,
+            priority: 10,
+            requested_by: currentUser?.id || null,
+            message: 'Ticketprüfung über Website angefordert'
+          });
+
+        if (jobError && jobError.code !== '23505') throw jobError;
+
+        renderPackagesPreserveScroll();
+      } catch (error) {
+        console.error(error);
+        alert(`Ticket-Prüfung konnte nicht in die dev2-Queue gelegt werden: ${error.message || error}`);
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      }
+    }
+
+    async function queueRedmineTicketCopy(packageId, btn) {
+      if (!currentUser) {
+        alert('Bitte zuerst einloggen.');
+        return;
+      }
+
+      const link = ticketLinksByPackage[packageId];
+      if (!link?.ticket_id) return;
+
+      const originalText = btn?.textContent || '';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Erstelle ...';
+      }
+
+      try {
+        const { error: jobError } = await sb
+          .from('redmine_ticket_jobs')
+          .insert({
+            job_type: 'create_copy',
+            status: 'queued',
+            package_id: packageId,
+            ticket_id: Number(link.ticket_id),
+            priority: 20,
+            requested_by: currentUser?.id || null,
+            message: 'Ticket-Kopie über Website angefordert'
+          });
+
+        if (jobError && jobError.code !== '23505') throw jobError;
+        renderPackagesPreserveScroll();
+      } catch (error) {
+        console.error(error);
+        alert(`Ticket-Kopie konnte nicht in die dev2-Queue gelegt werden: ${error.message || error}`);
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      }
+    }
+
+    async function refreshTicketLink(packageId) {
+      const { data, error } = await sb
+        .from('redmine_ticket_links')
+        .select('*')
+        .eq('package_id', packageId)
+        .maybeSingle();
+
+      if (!error && data) {
+        ticketLinksByPackage[packageId] = data;
+      }
+
+      renderPackagesPreserveScroll();
+      return false;
+    }
+
+    function startTicketPoll(packageId) {
+      // Kein dauerhaftes Browser-Polling mehr. Der dev2-Runner wird über die DB-Queue/NOTIFY aktiviert.
+      // Aktualisierung erfolgt über „Neu laden“ oder gezielte Einzel-Refreshs nach Benutzeraktionen.
+      return packageId;
+    }
+
+
+async function queueRedmineTicketCheckIfLinked(packageId) {
+  const link = ticketLinksByPackage[packageId];
+  if (!link || !link.ticket_id) return;
+
+  try {
+    const { error: jobError } = await sb
+      .from('redmine_ticket_jobs')
+      .insert({
+        job_type: 'check_ticket',
+        status: 'queued',
+        package_id: packageId,
+        ticket_id: Number(link.ticket_id),
+        priority: 5,
+        requested_by: currentUser?.id || null,
+        message: 'Ticketprüfung zusammen mit Paket-Sync angefordert'
+      });
+
+    if (jobError && jobError.code !== '23505') throw jobError;
+  } catch (error) {
+    console.warn('Ticket-Sync konnte nicht in die dev2-Queue gelegt werden:', error);
+  }
+}
 
 async function requestSync(packageId, btn) {
   if (!currentUser) {
@@ -2219,6 +2492,7 @@ async function requestSync(packageId, btn) {
     return;
   }
 
+  await queueRedmineTicketCheckIfLinked(packageId);
   startSyncPoll(packageId);
   loadAdminStats();
 }
